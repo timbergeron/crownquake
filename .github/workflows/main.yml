@@ -1,0 +1,39 @@
+name: crownquake
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache fteqcc
+        uses: actions/cache@v4
+        id: cache-fteqcc
+        with:
+          path: fteqcc64.exe
+          key: fteqcc-${{ runner.os }}
+
+      - name: Fetch fteqcc
+        if: steps.cache-fteqcc.outputs.cache-hit != 'true'
+        run: |
+          curl -o fteqcc_win64.zip https://www.fteqcc.org/dl/fteqcc_win64.zip
+          tar -xf fteqcc_win64.zip --include=fteqcc64.exe
+
+      - name: Compile Crownquake
+        run: .\fteqcc64.exe -src src
+
+      - name: Collect artifacts
+        run: |
+          if (!(Test-Path -Path "src\progs.dat")) {
+            throw "src\progs.dat was not generated"
+          }
+          New-Item -ItemType Directory -Force -Path release
+          Move-Item -Force src\progs.dat release\progs.dat
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crownquake-progs
+          path: release\progs.dat
