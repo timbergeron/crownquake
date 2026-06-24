@@ -1,0 +1,234 @@
+//Decompiled code. Please respect the original copyright.
+void() InitBodyQue;
+
+void() main =
+{
+	dprint("main function\n");
+	precache_file("progs.dat");
+	precache_file("gfx.wad");
+	precache_file("quake.rc");
+	precache_file("default.cfg");
+	precache_file("end1.bin");
+	precache_file2("end2.bin");
+	precache_file("demo1.dem");
+	precache_file("demo2.dem");
+	precache_file("demo3.dem");
+	precache_file("gfx/palette.lmp");
+	precache_file("gfx/colormap.lmp");
+	precache_file2("gfx/pop.lmp");
+	precache_file("gfx/complete.lmp");
+	precache_file("gfx/inter.lmp");
+	precache_file("gfx/ranking.lmp");
+	precache_file("gfx/vidmodes.lmp");
+	precache_file("gfx/finale.lmp");
+	precache_file("gfx/conback.lmp");
+	precache_file("gfx/qplaque.lmp");
+	precache_file("gfx/menudot1.lmp");
+	precache_file("gfx/menudot2.lmp");
+	precache_file("gfx/menudot3.lmp");
+	precache_file("gfx/menudot4.lmp");
+	precache_file("gfx/menudot5.lmp");
+	precache_file("gfx/menudot6.lmp");
+	precache_file("gfx/menuplyr.lmp");
+	precache_file("gfx/bigbox.lmp");
+	precache_file("gfx/dim_modm.lmp");
+	precache_file("gfx/dim_drct.lmp");
+	precache_file("gfx/dim_ipx.lmp");
+	precache_file("gfx/dim_tcp.lmp");
+	precache_file("gfx/dim_mult.lmp");
+	precache_file("gfx/mainmenu.lmp");
+	precache_file("gfx/box_tl.lmp");
+	precache_file("gfx/box_tm.lmp");
+	precache_file("gfx/box_tr.lmp");
+	precache_file("gfx/box_ml.lmp");
+	precache_file("gfx/box_mm.lmp");
+	precache_file("gfx/box_mm2.lmp");
+	precache_file("gfx/box_mr.lmp");
+	precache_file("gfx/box_bl.lmp");
+	precache_file("gfx/box_bm.lmp");
+	precache_file("gfx/box_br.lmp");
+	precache_file("gfx/sp_menu.lmp");
+	precache_file("gfx/ttl_sgl.lmp");
+	precache_file("gfx/ttl_main.lmp");
+	precache_file("gfx/ttl_cstm.lmp");
+	precache_file("gfx/mp_menu.lmp");
+	precache_file("gfx/netmen1.lmp");
+	precache_file("gfx/netmen2.lmp");
+	precache_file("gfx/netmen3.lmp");
+	precache_file("gfx/netmen4.lmp");
+	precache_file("gfx/netmen5.lmp");
+	precache_file("gfx/sell.lmp");
+	precache_file("gfx/help0.lmp");
+	precache_file("gfx/help1.lmp");
+	precache_file("gfx/help2.lmp");
+	precache_file("gfx/help3.lmp");
+	precache_file("gfx/help4.lmp");
+	precache_file("gfx/help5.lmp");
+	precache_file("gfx/pause.lmp");
+	precache_file("gfx/loading.lmp");
+	precache_file("gfx/p_option.lmp");
+	precache_file("gfx/p_load.lmp");
+	precache_file("gfx/p_save.lmp");
+	precache_file("gfx/p_multi.lmp");
+	precache_sound("misc/menu1.wav");
+	precache_sound("misc/menu2.wav");
+	precache_sound("misc/menu3.wav");
+	precache_sound("ambience/water1.wav");
+	precache_sound("ambience/wind2.wav");
+	precache_file("maps/start.bsp");
+	precache_file("maps/e1m1.bsp");
+	precache_file("maps/e1m2.bsp");
+	precache_file("maps/e1m3.bsp");
+	precache_file("maps/e1m4.bsp");
+	precache_file("maps/e1m5.bsp");
+	precache_file("maps/e1m6.bsp");
+	precache_file("maps/e1m7.bsp");
+	precache_file("maps/e1m8.bsp");
+	precache_file2("gfx/pop.lmp");
+	precache_file2("maps/e2m1.bsp");
+	precache_file2("maps/e2m2.bsp");
+	precache_file2("maps/e2m3.bsp");
+	precache_file2("maps/e2m4.bsp");
+	precache_file2("maps/e2m5.bsp");
+	precache_file2("maps/e2m6.bsp");
+	precache_file2("maps/e2m7.bsp");
+	precache_file2("maps/e3m1.bsp");
+	precache_file2("maps/e3m2.bsp");
+	precache_file2("maps/e3m3.bsp");
+	precache_file2("maps/e3m4.bsp");
+	precache_file2("maps/e3m5.bsp");
+	precache_file2("maps/e3m6.bsp");
+	precache_file2("maps/e3m7.bsp");
+	precache_file2("maps/e4m1.bsp");
+	precache_file2("maps/e4m2.bsp");
+	precache_file2("maps/e4m3.bsp");
+	precache_file2("maps/e4m4.bsp");
+	precache_file2("maps/e4m5.bsp");
+	precache_file2("maps/e4m6.bsp");
+	precache_file2("maps/e4m7.bsp");
+	precache_file2("maps/e4m8.bsp");
+	precache_file2("maps/end.bsp");
+	precache_file2("maps/dm1.bsp");
+	precache_file2("maps/dm2.bsp");
+	precache_file2("maps/dm3.bsp");
+	precache_file2("maps/dm4.bsp");
+	precache_file2("maps/dm5.bsp");
+	precache_file2("maps/dm6.bsp");
+};
+entity lastspawn;
+
+void() worldspawn =
+{
+	lastspawn = world;
+	InitBodyQue();
+	if ((self.model == "maps/e1m8.bsp"))
+	{
+		cvar_set("sv_gravity", "100");
+	}
+	else
+	{
+		cvar_set("sv_gravity", "800");
+	}
+	W_Precache();
+	precache_sound("demon/dland2.wav");
+	precache_sound("misc/h2ohit1.wav");
+	precache_sound("player/land.wav");
+	precache_sound("misc/talk.wav");
+	precache_sound("misc/r_tele1.wav");
+	precache_sound("misc/r_tele2.wav");
+	precache_sound("misc/r_tele3.wav");
+	precache_sound("misc/r_tele4.wav");
+	precache_sound("misc/r_tele5.wav");
+	precache_sound("weapons/lhit.wav");
+	precache_sound("weapons/lstart.wav");
+	precache_sound("items/damage3.wav");
+	precache_sound("misc/power.wav");
+	precache_sound("player/gib.wav");
+	precache_sound("player/udeath.wav");
+	precache_sound("player/tornoff2.wav");
+	precache_sound("player/h2ojump.wav");
+	precache_sound("player/inh2o.wav");
+	precache_sound("misc/water1.wav");
+	precache_sound("misc/water2.wav");
+	precache_sound("voice/check.wav");
+	precache_sound("voice/chckmate.wav");
+	precache_sound("effects/spell.wav");
+	precache_sound("effects/button.wav");
+	precache_sound("boss1/death.wav");
+	precache_model("progs/demon.mdl");
+	precache_model("progs/player.mdl");
+	precache_model("progs/eyes.mdl");
+	precache_model("progs/h_player.mdl");
+	precache_model("progs/gib1.mdl");
+	precache_model("progs/gib2.mdl");
+	precache_model("progs/gib3.mdl");
+	precache_model("progs/missile.mdl");
+	precache_model("progs/s_bubble.spr");
+	precache_model("progs/s_explod.spr");
+	precache_model("progs/v_shot.mdl");
+	precache_model("progs/bolt.mdl");
+	precache_model("progs/bolt2.mdl");
+	precache_model("progs/bolt3.mdl");
+	precache_model("progs/spike.mdl");
+	precache_model("progs/s_spike.mdl");
+	precache_model("progs/backpack.mdl");
+	precache_model("progs/zom_gib.mdl");
+	precache_model("progs/v_light.mdl");
+	precache_model("progs/null.mdl");
+	precache_model("progs/headcam.mdl");
+	lightstyle(MSG_BROADCAST, "m");
+	lightstyle(1, "mmnmmommommnonmmonqnmmo");
+	lightstyle(WEAPON_ROCKET, "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba");
+	lightstyle(AS_MELEE, "mmmmmaaaaammmmmaaaaaabcdefgabcdefg");
+	lightstyle(WEAPON_SPIKES, "mamamamamama");
+	lightstyle(TE_LIGHTNING1, "jklmnopqrstuvwxyzyxwvutsrqponmlkj");
+	lightstyle(TE_LIGHTNING2, "nmonqnmomnmomomno");
+	lightstyle(TE_WIZSPIKE, "mmmaaaabcdefgmmmmaaaammmaamm");
+	lightstyle(WEAPON_BIG, "mmmaaammmaaammmabcdefaaaammmmabcdefmmmaaaa");
+	lightstyle(TE_LIGHTNING3, "aaaaaaaazzzzzzzz");
+	lightstyle(10, "mmamammmmammamamaaamammma");
+	lightstyle(TE_TELEPORT, "abcdefghijklmnopqrrqponmlkjihgfedcba");
+	lightstyle(63, "a");
+};
+
+void() StartFrame =
+{
+	teamplay = cvar("teamplay");
+	skill = cvar("skill");
+	framecount = (framecount + 1);
+};
+entity bodyque_head;
+
+void() bodyque =
+{
+};
+
+void() InitBodyQue =
+{
+	local entity e;
+
+	bodyque_head = spawn();
+	bodyque_head.classname = "bodyque";
+	bodyque_head.owner = spawn();
+	bodyque_head.owner.classname = "bodyque";
+	bodyque_head.owner.owner = spawn();
+	bodyque_head.owner.owner.classname = "bodyque";
+	bodyque_head.owner.owner.owner = spawn();
+	bodyque_head.owner.owner.owner.classname = "bodyque";
+	bodyque_head.owner.owner.owner.owner = bodyque_head;
+};
+
+void(entity ent) CopyToBodyQue =
+{
+	bodyque_head.angles = ent.angles;
+	bodyque_head.model = ent.model;
+	bodyque_head.modelindex = ent.modelindex;
+	bodyque_head.frame = ent.frame;
+	bodyque_head.colormap = ent.colormap;
+	bodyque_head.movetype = ent.movetype;
+	bodyque_head.velocity = ent.velocity;
+	bodyque_head.flags = MSG_BROADCAST;
+	setorigin(bodyque_head, ent.origin);
+	setsize(bodyque_head, ent.mins, ent.maxs);
+	bodyque_head = bodyque_head.owner;
+};

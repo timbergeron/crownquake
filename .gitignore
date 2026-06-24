@@ -1,0 +1,9 @@
+src/progs.dat
+src/progs.lno
+progs.dat
+*.lno
+qc.asm
+qconsole.log
+QCONSOLE.LOG
+*.lst
+*.LST
