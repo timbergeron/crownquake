@@ -1,5 +1,5 @@
 //Decompiled code. Please respect the original copyright.
-void() shalrath_pain;
+void(entity attacker, float damage) shalrath_pain;
 void() ShalMissile;
 
 void() shal_stand = [ 23, shal_stand ]
@@ -243,7 +243,7 @@ void() shal_death7 = [ 22, shal_death7 ]
 	self.nextthink = (time + 60);
 };
 
-void() shalrath_pain =
+void(entity attacker, float damage) shalrath_pain =
 {
 	if ((self.pain_finished > time))
 	{

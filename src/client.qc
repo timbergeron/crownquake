@@ -1,5 +1,5 @@
 //Decompiled code. Please respect the original copyright.
-void() player_pain;
+void(entity attacker, float damage) player_pain;
 void() player_stand1;
 void(vector org, entity death_owner) spawn_tdeath;
 float modelindex_eyes;
@@ -109,6 +109,7 @@ entity() FindIntermission =
 		return (spot);
 	}
 	objerror("FindIntermission: no spot");
+	return (world);
 };
 string nextmap;
 
@@ -970,14 +971,14 @@ void() PlayerPreThink =
 	self.last_vel = self.velocity;
 	if ((((current_turn == self) || single_player) && !action_flag))
 	{
-		if ((((current_turn.turn_starttime < ((time - time_per_turn) + 15)) && (time_per_turn > 25)) && !(current_turn.chess_flags & CF_TIME_NOTIFY)))
+		if ((((time_per_turn > 25) && (current_turn.turn_starttime < ((time - time_per_turn) + 15))) && !(current_turn.chess_flags & CF_TIME_NOTIFY)))
 		{
 			mycentreprint(self, "You have 15 seconds to move");
 			current_turn.chess_flags = (current_turn.chess_flags | CF_TIME_NOTIFY);
 		}
 		else
 		{
-			if ((current_turn.turn_starttime < (time - time_per_turn)))
+			if (((time_per_turn > MSG_BROADCAST) && (current_turn.turn_starttime < (time - time_per_turn))))
 			{
 				sprint(self, "Time Expired: you have forfeited your turn\n");
 				next_turn();

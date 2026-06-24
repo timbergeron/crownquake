@@ -35,3 +35,5 @@ quake -game crownquake +teamplay 0 +checkers 1
 ```
 
 Checkers uses 12 men per side on dark squares. Men move and capture forward diagonally, kings move and capture one square diagonally in either direction, captures are mandatory, multi-jumps continue with the same piece, passing is disabled, and a side loses when it has no pieces or no legal move.
+
+Turns are untimed when `timelimit` is `0` or omitted. Set `timelimit` to a positive number of seconds to use a per-turn clock, for example `+timelimit 60`.

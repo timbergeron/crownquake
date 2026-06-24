@@ -507,6 +507,17 @@ float SECRET_1ST_DOWN    = 4;
 float SECRET_NO_SHOOT    = 8;
 float SECRET_YES_SHOOT    = 16;
 
+void() fd_secret_use;
+
+void(entity attacker, float damage) fd_secret_pain =
+{
+	fd_secret_use();
+};
+
+void(entity attacker, float damage) fd_secret_no_pain =
+{
+};
+
 void() fd_secret_use =
 {
 	local float temp;
@@ -520,7 +531,7 @@ void() fd_secret_use =
 	SUB_UseTargets();
 	if (!(self.spawnflags & SECRET_NO_SHOOT))
 	{
-		self.th_pain = SUB_Null;
+		self.th_pain = fd_secret_no_pain;
 		self.takedamage = DAMAGE_NO;
 	}
 	self.velocity = '0 0 0';
@@ -604,7 +615,7 @@ void() fd_secret_done =
 	{
 		self.health = 10000;
 		self.takedamage = DAMAGE_YES;
-		self.th_pain = fd_secret_use;
+		self.th_pain = fd_secret_pain;
 	}
 	sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 };
@@ -687,7 +698,7 @@ void() func_door_secret =
 	{
 		self.health = 10000;
 		self.takedamage = DAMAGE_YES;
-		self.th_pain = fd_secret_use;
+		self.th_pain = fd_secret_pain;
 		self.th_die = fd_secret_use;
 	}
 	self.oldorigin = self.origin;

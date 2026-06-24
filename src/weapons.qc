@@ -386,7 +386,7 @@ void() W_FireLightning =
 	WriteCoord(MSG_BROADCAST, org_x);
 	WriteCoord(MSG_BROADCAST, org_y);
 	WriteCoord(MSG_BROADCAST, org_z);
-	WriteCoord(MSG_BROADCAST, trace_endpos);
+	WriteCoord(MSG_BROADCAST, trace_endpos_x);
 	WriteCoord(MSG_BROADCAST, trace_endpos_y);
 	WriteCoord(MSG_BROADCAST, trace_endpos_z);
 	LightningDamage(self.origin, (trace_endpos + (v_forward * WEAPON_SPIKES)), self, SVC_INTERMISSION);
@@ -1297,10 +1297,20 @@ void() W_WeaponFrame =
 {
 	local float time_left;
 
-	time_left = ceil((time_per_turn - (time - current_turn.turn_starttime)));
-	if ((self.armorvalue != time_left))
+	if (((time_per_turn > MSG_BROADCAST) && (current_turn != world)))
 	{
-		self.armorvalue = time_left;
+		time_left = ceil((time_per_turn - (time - current_turn.turn_starttime)));
+		if ((self.armorvalue != time_left))
+		{
+			self.armorvalue = time_left;
+		}
+	}
+	else
+	{
+		if ((self.armorvalue != MSG_BROADCAST))
+		{
+			self.armorvalue = MSG_BROADCAST;
+		}
 	}
 	if ((time < self.attack_finished))
 	{

@@ -32,6 +32,11 @@ QUICK START
   Chess is the default. Set the "checkers" cvar before the match starts
   to use checkers mode.
 
+  Turns are untimed when "timelimit" is 0 or omitted. Set timelimit to a
+  positive number of seconds to use a per-turn clock, for example:
+
+    quake -game crownquake +teamplay 0 +checkers 1 +timelimit 60
+
 CONTROLS
 
     Normal Quake controls are used for looking around.

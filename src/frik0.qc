@@ -281,80 +281,7 @@ void() FoundTarget =
 
 float() FindTarget =
 {
-	local entity client;
-	local float r;
-
 	return (FALSE);
-	if ((self.classname == "chess_king"))
-	{
-		return (FALSE);
-	}
-	if (((sight_entity_time >= (time - 0.1)) && !(self.spawnflags & AS_MELEE)))
-	{
-		client = sight_entity;
-		if ((client.enemy == self.enemy))
-		{
-			return;
-		}
-	}
-	else
-	{
-		client = checkclient();
-		if (!client)
-		{
-			return (FALSE);
-		}
-	}
-	if ((client == self.enemy))
-	{
-		return (FALSE);
-	}
-	if ((client.flags & FL_NOTARGET))
-	{
-		return (FALSE);
-	}
-	if ((client.items & IT_INVISIBILITY))
-	{
-		return (FALSE);
-	}
-	r = range(client);
-	if ((r == RANGE_FAR))
-	{
-		return (FALSE);
-	}
-	if (!visible(client))
-	{
-		return (FALSE);
-	}
-	if ((r == RANGE_NEAR))
-	{
-		if (((client.show_hostile < time) && !infront(client)))
-		{
-			return (FALSE);
-		}
-	}
-	else
-	{
-		if ((r == RANGE_MID))
-		{
-			if (!infront(client))
-			{
-				return (FALSE);
-			}
-		}
-	}
-	self.enemy = client;
-	if ((self.enemy.classname != "player"))
-	{
-		self.enemy = self.enemy.enemy;
-		if ((self.enemy.classname != "player"))
-		{
-			self.enemy = world;
-			return (FALSE);
-		}
-	}
-	FoundTarget();
-	return (TRUE);
 };
 
 void(float dist) ai_forward =
@@ -526,17 +453,17 @@ void(vector dest3) ChooseTurn =
 
 	dir = (self.origin - dest3);
 	newdir_x = trace_plane_normal_y;
-	newdir_y = (MSG_BROADCAST - trace_plane_normal);
+	newdir_y = (MSG_BROADCAST - trace_plane_normal_x);
 	newdir_z = MSG_BROADCAST;
 	if (((dir * newdir) > MSG_BROADCAST))
 	{
 		dir_x = (MSG_BROADCAST - trace_plane_normal_y);
-		dir_y = trace_plane_normal;
+		dir_y = trace_plane_normal_x;
 	}
 	else
 	{
 		dir_x = trace_plane_normal_y;
-		dir_y = (MSG_BROADCAST - trace_plane_normal);
+		dir_y = (MSG_BROADCAST - trace_plane_normal_x);
 	}
 	dir_z = MSG_BROADCAST;
 	self.ideal_yaw = vectoyaw(dir);
@@ -560,7 +487,7 @@ float() CheckAnyAttack =
 {
 	if (!enemy_vis)
 	{
-		return;
+		return (FALSE);
 	}
 	if ((self.classname == "monster_army"))
 	{

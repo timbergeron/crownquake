@@ -595,7 +595,7 @@ void() grab_run6 = [ 26, grab_run1 ]
 void() grab_walk1 = [ 13, grab_walk2 ]
 {
 	ai_walk(8);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -604,7 +604,7 @@ void() grab_walk1 = [ 13, grab_walk2 ]
 void() grab_walk2 = [ 14, grab_walk3 ]
 {
 	ai_walk(TE_LIGHTNING2);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -613,7 +613,7 @@ void() grab_walk2 = [ 14, grab_walk3 ]
 void() grab_walk3 = [ 15, grab_walk4 ]
 {
 	ai_walk(TE_LIGHTNING2);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -622,7 +622,7 @@ void() grab_walk3 = [ 15, grab_walk4 ]
 void() grab_walk4 = [ 16, grab_walk5 ]
 {
 	ai_walk(TE_WIZSPIKE);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -631,7 +631,7 @@ void() grab_walk4 = [ 16, grab_walk5 ]
 void() grab_walk5 = [ 17, grab_walk6 ]
 {
 	ai_walk(SECRET_1ST_DOWN);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -640,7 +640,7 @@ void() grab_walk5 = [ 17, grab_walk6 ]
 void() grab_walk6 = [ 18, grab_walk7 ]
 {
 	ai_walk(TE_LIGHTNING2);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -649,7 +649,7 @@ void() grab_walk6 = [ 18, grab_walk7 ]
 void() grab_walk7 = [ 19, grab_walk8 ]
 {
 	ai_walk(10);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);
@@ -658,7 +658,7 @@ void() grab_walk7 = [ 19, grab_walk8 ]
 void() grab_walk8 = [ 20, grab_walk1 ]
 {
 	ai_walk(10);
-	gborg = self.origin_x;
+	gborg_x = self.origin_x;
 	gborg_y = self.origin_y;
 	gborg_z = GetBody.origin_z;
 	setorigin(GetBody, gborg);

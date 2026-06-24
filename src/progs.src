@@ -1,6 +1,7 @@
 ./progs.dat
 
 #pragma flag enable lax //remove this line once you've fixed up any decompiler bugs...
+#pragma warning disable Q302 // retained decompiler/API declarations intentionally unused
 
 sysdefs.qc
 defs.qc

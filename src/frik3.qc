@@ -155,7 +155,7 @@ void() FindLocation =
 		{
 			v1_y = SPAWN_CRUCIFIED;
 		}
-		v1_x = ceil(v1);
+		v1_x = ceil(v1_x);
 		if ((v1_x > 8))
 		{
 			v1_x = 8;
@@ -198,7 +198,7 @@ void() FindSelection =
 			current_selected = world;
 		}
 	}
-	if (((((current_selected != world) && (current_selected.owner == current_turn)) && (self.last_voice_entity.classname != current_selected.classname)) && (self.last_voice < (time - 1.5))))
+	if (((((!game_checkers && (current_selected != world)) && (current_selected.owner == current_turn)) && (self.last_voice_entity.classname != current_selected.classname)) && (self.last_voice < (time - 1.5))))
 	{
 		mystuffcmd(current_turn, "play voice/");
 		mystuffcmd(current_turn, current_selected.netname);
@@ -302,6 +302,24 @@ float(float loc) CheckersOnBoard =
 	x = GetX(loc);
 	y = GetY(loc);
 	return (((x >= 1) && (x <= 8)) && ((y >= 1) && (y <= 8)));
+};
+
+void() CheckersClearCaptureTarget =
+{
+	checkers_capture_entity = world;
+	checkers_capture_location = 0;
+	if ((current_selected != world))
+	{
+		current_selected.enemy = world;
+	}
+};
+
+void() CheckersClearTurnState =
+{
+	checkers_must_jump = FALSE;
+	checkers_was_jump = FALSE;
+	CheckersClearCaptureTarget();
+	current_selected = world;
 };
 
 void(string team_name, float loc) SpawnCheckerMan =
@@ -415,10 +433,7 @@ void() SpawnCheckersBoard =
 	SpawnCheckersRank("black", 6, 2);
 	SpawnCheckersRank("black", 7, 1);
 	SpawnCheckersRank("black", 8, 2);
-	checkers_must_jump = FALSE;
-	checkers_was_jump = FALSE;
-	checkers_capture_entity = world;
-	checkers_capture_location = 0;
+	CheckersClearTurnState();
 	checkers_board_spawned = TRUE;
 	bprint("** crownquake checkers mode: board spawned\n");
 };
@@ -649,8 +664,7 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckersValidMove
 
 	if (actual_move)
 	{
-		checkers_capture_entity = world;
-		checkers_capture_location = 0;
+		CheckersClearCaptureTarget();
 		checkers_was_jump = FALSE;
 		ent.enemy = world;
 	}
@@ -990,6 +1004,7 @@ entity(float loc) CrappyEntityAtLoc =
 		}
 		eal_ent = eal_ent.chain;
 	}
+	return (world);
 };
 
 entity(float loc) EntityAtLoc =
@@ -1316,6 +1331,17 @@ vector(float loc) LocationToVector =
 	return (dest_org);
 };
 
+void() ClearLastHighlight =
+{
+	if ((last_highlight != world))
+	{
+		setorigin(last_highlight, last_highlight.pos2);
+		last_highlight.pos2 = last_highlight.pos1;
+		last_highlight.pos1 = last_highlight.origin;
+		last_highlight = world;
+	}
+};
+
 void() ProcessSelection =
 {
 	local vector dest_org;
@@ -1396,66 +1422,69 @@ void() ProcessSelection =
 				setorigin(light_ent, (current_selected.origin + '0 0 96'));
 			}
 			light_ent.effects = EF_DIMLIGHT;
-			if ((current_selected.classname == "chess_pawn"))
+			if (!game_checkers)
 			{
-				if (secret_monsters)
+				if ((current_selected.classname == "chess_pawn"))
 				{
-					mystuffcmd(current_turn, "play dog/idle.wav\n");
+					if (secret_monsters)
+					{
+						mystuffcmd(current_turn, "play dog/idle.wav\n");
+					}
+					else
+					{
+						random_pawn_speech();
+					}
+				}
+				if ((current_selected.classname == "chess_bishop"))
+				{
+					if (secret_monsters)
+					{
+						random_pawn_speech();
+					}
+					else
+					{
+						random_bishop_speech();
+					}
+				}
+				if ((current_selected.classname == "chess_knight"))
+				{
+					if (secret_monsters)
+					{
+						random_scrag_speech();
+					}
+					else
+					{
+						random_fiend_speech();
+					}
+				}
+				if ((current_selected.classname == "chess_rook"))
+				{
+					if (secret_monsters)
+					{
+						random_bishop_speech();
+					}
+					else
+					{
+						random_rook_speech();
+					}
+				}
+				if ((current_selected.classname == "chess_queen"))
+				{
+					if (secret_monsters)
+					{
+						mystuffcmd(current_turn, "play shalrath/sight.wav\n");
+					}
+					else
+					{
+						mystuffcmd(current_turn, "play shambler/sidle.wav\n");
+					}
 				}
 				else
 				{
-					random_pawn_speech();
-				}
-			}
-			if ((current_selected.classname == "chess_bishop"))
-			{
-				if (secret_monsters)
-				{
-					random_pawn_speech();
-				}
-				else
-				{
-					random_bishop_speech();
-				}
-			}
-			if ((current_selected.classname == "chess_knight"))
-			{
-				if (secret_monsters)
-				{
-					random_scrag_speech();
-				}
-				else
-				{
-					random_fiend_speech();
-				}
-			}
-			if ((current_selected.classname == "chess_rook"))
-			{
-				if (secret_monsters)
-				{
-					random_bishop_speech();
-				}
-				else
-				{
-					random_rook_speech();
-				}
-			}
-			if ((current_selected.classname == "chess_queen"))
-			{
-				if (secret_monsters)
-				{
-					mystuffcmd(current_turn, "play shalrath/sight.wav\n");
-				}
-				else
-				{
-					mystuffcmd(current_turn, "play shambler/sidle.wav\n");
-				}
-			}
-			else
-			{
-				if ((current_selected.classname == "chess_king"))
-				{
-					random_king_speech();
+					if ((current_selected.classname == "chess_king"))
+					{
+						random_king_speech();
+					}
 				}
 			}
 		}
@@ -1463,262 +1492,183 @@ void() ProcessSelection =
 		{
 			if ((current_destination != ""))
 			{
-				if (CanMove(current_selected, current_dest_int, TRUE))
-				{
-					action_flag = TRUE;
-					light_ent.effects = MSG_BROADCAST;
-					dest_org = LocationToVector(current_dest_int);
-					setorigin(dest_ent, dest_org);
-					mystuffcmd(self, "play effects/button.wav\n");
+					if (CanMove(current_selected, current_dest_int, TRUE))
+					{
+						action_flag = TRUE;
+						light_ent.effects = MSG_BROADCAST;
+						ClearLastHighlight();
+						dest_org = LocationToVector(current_dest_int);
+						setorigin(dest_ent, dest_org);
+						mystuffcmd(self, "play effects/button.wav\n");
 					if ((current_selected.think != FoundTarget))
 					{
 						WalkToDest(self);
-						if ((current_selected.classname == "chess_pawn"))
+						if (!game_checkers)
 						{
-							if (secret_monsters)
+							if ((current_selected.classname == "chess_pawn"))
 							{
-								mystuffcmd(current_turn, "play dog/dsight.wav\n");
-							}
-							else
-							{
-								mystuffcmd(current_turn, "play voice/pawn/hyessir4.wav\n");
-							}
-						}
-						if ((current_selected.classname == "chess_bishop"))
-						{
-							if (secret_monsters)
-							{
-								mystuffcmd(current_turn, "play voice/pawn/hyessir4.wav\n");
-							}
-							else
-							{
-								rnd = (random() * AS_MELEE);
-								if ((rnd < SPAWN_CRUCIFIED))
+								if (secret_monsters)
 								{
-									mystuffcmd(current_turn, "play voice/bishop/tuyessr1.wav\n");
+									mystuffcmd(current_turn, "play dog/dsight.wav\n");
 								}
 								else
 								{
-									if ((rnd < SPAWNFLAG_LASER))
-									{
-										mystuffcmd(current_turn, "play voice/bishop/tuyessr2.wav\n");
-									}
-									else
-									{
-										if ((rnd < AS_MELEE))
-										{
-											mystuffcmd(current_turn, "play voice/bishop/tuyessr3.wav\n");
-										}
-									}
+									mystuffcmd(current_turn, "play voice/pawn/hyessir4.wav\n");
 								}
 							}
-						}
-						if ((current_selected.classname == "chess_knight"))
-						{
-							if (secret_monsters)
+							if ((current_selected.classname == "chess_bishop"))
 							{
-								mystuffcmd(current_turn, "play wizard/wsight.wav\n");
-							}
-							else
-							{
-								mystuffcmd(current_turn, "play demon/sight2.wav\n");
-							}
-						}
-						if ((current_selected.classname == "chess_rook"))
-						{
-							if (secret_monsters)
-							{
-								rnd = (random() * AS_MELEE);
-								if ((rnd < SPAWN_CRUCIFIED))
+								if (secret_monsters)
 								{
-									mystuffcmd(current_turn, "play voice/bishop/tuyessr1.wav\n");
+									mystuffcmd(current_turn, "play voice/pawn/hyessir4.wav\n");
 								}
 								else
 								{
-									if ((rnd < SPAWNFLAG_LASER))
+									rnd = (random() * AS_MELEE);
+									if ((rnd < SPAWN_CRUCIFIED))
 									{
-										mystuffcmd(current_turn, "play voice/bishop/tuyessr2.wav\n");
+										mystuffcmd(current_turn, "play voice/bishop/tuyessr1.wav\n");
 									}
 									else
 									{
-										if ((rnd < AS_MELEE))
+										if ((rnd < SPAWNFLAG_LASER))
 										{
-											mystuffcmd(current_turn, "play voice/bishop/tuyessr3.wav\n");
-										}
-									}
-								}
-							}
-							else
-							{
-								rnd = (random() * SECRET_1ST_DOWN);
-								if ((rnd < SPAWN_CRUCIFIED))
-								{
-									mystuffcmd(current_turn, "play voice/rook/yessir1.wav\n");
-								}
-								else
-								{
-									if ((rnd < SPAWNFLAG_LASER))
-									{
-										mystuffcmd(current_turn, "play voice/rook/yessir2.wav\n");
-									}
-									else
-									{
-										if ((rnd < AS_MELEE))
-										{
-											mystuffcmd(current_turn, "play voice/rook/yessir3.wav\n");
+											mystuffcmd(current_turn, "play voice/bishop/tuyessr2.wav\n");
 										}
 										else
 										{
-											if ((rnd < SECRET_1ST_DOWN))
+											if ((rnd < AS_MELEE))
 											{
-												mystuffcmd(current_turn, "play voice/rook/yessir4.wav\n");
+												mystuffcmd(current_turn, "play voice/bishop/tuyessr3.wav\n");
 											}
 										}
 									}
 								}
 							}
-						}
-						if ((current_selected.classname == "chess_queen"))
-						{
-							if (secret_monsters)
+							if ((current_selected.classname == "chess_knight"))
 							{
-								mystuffcmd(current_turn, "play shalrath/idle.wav\n");
+								if (secret_monsters)
+								{
+									mystuffcmd(current_turn, "play wizard/wsight.wav\n");
+								}
+								else
+								{
+									mystuffcmd(current_turn, "play demon/sight2.wav\n");
+								}
 							}
-							else
+							if ((current_selected.classname == "chess_rook"))
+							{
+								if (secret_monsters)
+								{
+									rnd = (random() * AS_MELEE);
+									if ((rnd < SPAWN_CRUCIFIED))
+									{
+										mystuffcmd(current_turn, "play voice/bishop/tuyessr1.wav\n");
+									}
+									else
+									{
+										if ((rnd < SPAWNFLAG_LASER))
+										{
+											mystuffcmd(current_turn, "play voice/bishop/tuyessr2.wav\n");
+										}
+										else
+										{
+											if ((rnd < AS_MELEE))
+											{
+												mystuffcmd(current_turn, "play voice/bishop/tuyessr3.wav\n");
+											}
+										}
+									}
+								}
+								else
+								{
+									rnd = (random() * SECRET_1ST_DOWN);
+									if ((rnd < SPAWN_CRUCIFIED))
+									{
+										mystuffcmd(current_turn, "play voice/rook/yessir1.wav\n");
+									}
+									else
+									{
+										if ((rnd < SPAWNFLAG_LASER))
+										{
+											mystuffcmd(current_turn, "play voice/rook/yessir2.wav\n");
+										}
+										else
+										{
+											if ((rnd < AS_MELEE))
+											{
+												mystuffcmd(current_turn, "play voice/rook/yessir3.wav\n");
+											}
+											else
+											{
+												if ((rnd < SECRET_1ST_DOWN))
+												{
+													mystuffcmd(current_turn, "play voice/rook/yessir4.wav\n");
+												}
+											}
+										}
+									}
+								}
+							}
+							if ((current_selected.classname == "chess_queen"))
+							{
+								if (secret_monsters)
+								{
+									mystuffcmd(current_turn, "play shalrath/idle.wav\n");
+								}
+								else
+								{
+									rnd = (random() * SPAWNFLAG_LASER);
+									if ((rnd < SPAWN_CRUCIFIED))
+									{
+										mystuffcmd(current_turn, "play shambler/melee1.wav\n");
+									}
+									else
+									{
+										if ((rnd < SPAWNFLAG_LASER))
+										{
+											mystuffcmd(current_turn, "play shambler/melee2.wav\n");
+										}
+									}
+								}
+							}
+							if ((current_selected.classname == "chess_king"))
 							{
 								rnd = (random() * SPAWNFLAG_LASER);
 								if ((rnd < SPAWN_CRUCIFIED))
 								{
-									mystuffcmd(current_turn, "play shambler/melee1.wav\n");
+									mystuffcmd(current_turn, "play zombie/z_pain1.wav\n");
 								}
 								else
 								{
 									if ((rnd < SPAWNFLAG_LASER))
 									{
-										mystuffcmd(current_turn, "play shambler/melee2.wav\n");
+										mystuffcmd(current_turn, "play zombie/z_pain.wav\n");
 									}
 								}
 							}
 						}
-						if ((current_selected.classname == "chess_king"))
-						{
-							rnd = (random() * SPAWNFLAG_LASER);
-							if ((rnd < SPAWN_CRUCIFIED))
-							{
-								mystuffcmd(current_turn, "play zombie/z_pain1.wav\n");
-							}
-							else
-							{
-								if ((rnd < SPAWNFLAG_LASER))
-								{
-									mystuffcmd(current_turn, "play zombie/z_pain.wav\n");
-								}
-							}
-						}
 					}
-					if ((current_selected.chess_team == "white"))
+					if (game_checkers)
 					{
-						movenum = (movenum + SPAWN_CRUCIFIED);
-					}
-					bprint("** ");
-					current_selected.location_str = ftos(movenum);
-					bprint(current_selected.location_str);
-					if ((current_selected.chess_team == "black"))
-					{
-						bprint("a");
-					}
-					if ((king_castle_move_flag == TRUE))
-					{
-						bprint(": O-O");
-						if ((GetX(current_dest_int) == AS_MELEE))
-						{
-							bprint("-O");
-						}
-						bprint("\n");
-					}
-					else
-					{
-						bprint(": [");
-						locx = GetX(current_selected.location);
-						if ((locx <= SECRET_1ST_DOWN))
-						{
-							bprint("Q");
-						}
-						else
-						{
-							if ((locx >= TE_LIGHTNING1))
-							{
-								bprint("K");
-							}
-						}
-						if (((locx == SPAWN_CRUCIFIED) || (locx == 8)))
-						{
-							bprint("R");
-						}
-						else
-						{
-							if (((locx == SPAWNFLAG_LASER) || (locx == TE_WIZSPIKE)))
-							{
-								bprint("Kt");
-							}
-							else
-							{
-								if (((locx == AS_MELEE) || (locx == TE_LIGHTNING2)))
-								{
-									bprint("B");
-								}
-							}
-						}
+						bprint("** Checkers: ");
 						if ((current_selected.chess_team == "white"))
 						{
-							locy = GetY(current_selected.location);
+							bprint("White ");
 						}
 						else
 						{
-							locy = (TE_LIGHTNING3 - GetY(current_selected.location));
+							bprint("Black ");
 						}
-						current_selected.location_str = ftos(locy);
-						bprint(current_selected.location_str);
-						bprint("] ");
-						if ((current_selected.classname == "chess_pawn"))
+						if (current_selected.isking)
 						{
-							bprint("P");
+							bprint("king ");
 						}
 						else
 						{
-							if ((current_selected.classname == "chess_bishop"))
-							{
-								bprint("B");
-							}
-							else
-							{
-								if ((current_selected.classname == "chess_knight"))
-								{
-									bprint("Kt");
-								}
-								else
-								{
-									if ((current_selected.classname == "chess_rook"))
-									{
-										bprint("R");
-									}
-									else
-									{
-										if ((current_selected.classname == "chess_queen"))
-										{
-											bprint("Q");
-										}
-										else
-										{
-											if ((current_selected.classname == "chess_king"))
-											{
-												bprint("K");
-											}
-										}
-									}
-								}
-							}
+							bprint("man ");
 						}
+						bprint(ftos(current_selected.location));
 						eatloc = current_selected.enemy;
 						if ((eatloc == world))
 						{
@@ -1727,37 +1677,107 @@ void() ProcessSelection =
 						else
 						{
 							bprint(" x ");
-							if ((eatloc.classname == "chess_pawn"))
+						}
+						bprint(ftos(current_dest_int));
+						bprint("\n");
+					}
+					else
+					{
+						if ((current_selected.chess_team == "white"))
+						{
+							movenum = (movenum + SPAWN_CRUCIFIED);
+						}
+						bprint("** ");
+						current_selected.location_str = ftos(movenum);
+						bprint(current_selected.location_str);
+						if ((current_selected.chess_team == "black"))
+						{
+							bprint("a");
+						}
+						if ((king_castle_move_flag == TRUE))
+						{
+							bprint(": O-O");
+							if ((GetX(current_dest_int) == AS_MELEE))
+							{
+								bprint("-O");
+							}
+							bprint("\n");
+						}
+						else
+						{
+							bprint(": [");
+							locx = GetX(current_selected.location);
+							if ((locx <= SECRET_1ST_DOWN))
+							{
+								bprint("Q");
+							}
+							else
+							{
+								if ((locx >= TE_LIGHTNING1))
+								{
+									bprint("K");
+								}
+							}
+							if (((locx == SPAWN_CRUCIFIED) || (locx == 8)))
+							{
+								bprint("R");
+							}
+							else
+							{
+								if (((locx == SPAWNFLAG_LASER) || (locx == TE_WIZSPIKE)))
+								{
+									bprint("Kt");
+								}
+								else
+								{
+									if (((locx == AS_MELEE) || (locx == TE_LIGHTNING2)))
+									{
+										bprint("B");
+									}
+								}
+							}
+							if ((current_selected.chess_team == "white"))
+							{
+								locy = GetY(current_selected.location);
+							}
+							else
+							{
+								locy = (TE_LIGHTNING3 - GetY(current_selected.location));
+							}
+							current_selected.location_str = ftos(locy);
+							bprint(current_selected.location_str);
+							bprint("] ");
+							if ((current_selected.classname == "chess_pawn"))
 							{
 								bprint("P");
 							}
 							else
 							{
-								if ((eatloc.classname == "chess_bishop"))
+								if ((current_selected.classname == "chess_bishop"))
 								{
 									bprint("B");
 								}
 								else
 								{
-									if ((eatloc.classname == "chess_knight"))
+									if ((current_selected.classname == "chess_knight"))
 									{
 										bprint("Kt");
 									}
 									else
 									{
-										if ((eatloc.classname == "chess_rook"))
+										if ((current_selected.classname == "chess_rook"))
 										{
 											bprint("R");
 										}
 										else
 										{
-											if ((eatloc.classname == "chess_queen"))
+											if ((current_selected.classname == "chess_queen"))
 											{
 												bprint("Q");
 											}
 											else
 											{
-												if ((eatloc.classname == "chess_king"))
+												if ((current_selected.classname == "chess_king"))
 												{
 													bprint("K");
 												}
@@ -1766,53 +1786,101 @@ void() ProcessSelection =
 									}
 								}
 							}
-							bprint(" [");
-						}
-						locx = GetX(current_dest_int);
-						if ((locx <= SECRET_1ST_DOWN))
-						{
-							bprint("Q");
-						}
-						else
-						{
-							if ((locx >= TE_LIGHTNING1))
+							eatloc = current_selected.enemy;
+							if ((eatloc == world))
 							{
-								bprint("K");
-							}
-						}
-						if (((locx == SPAWN_CRUCIFIED) || (locx == 8)))
-						{
-							bprint("R");
-						}
-						else
-						{
-							if (((locx == SPAWNFLAG_LASER) || (locx == TE_WIZSPIKE)))
-							{
-								bprint("Kt");
+								bprint(" - ");
 							}
 							else
 							{
-								if (((locx == AS_MELEE) || (locx == TE_LIGHTNING2)))
+								bprint(" x ");
+								if ((eatloc.classname == "chess_pawn"))
 								{
-									bprint("B");
+									bprint("P");
+								}
+								else
+								{
+									if ((eatloc.classname == "chess_bishop"))
+									{
+										bprint("B");
+									}
+									else
+									{
+										if ((eatloc.classname == "chess_knight"))
+										{
+											bprint("Kt");
+										}
+										else
+										{
+											if ((eatloc.classname == "chess_rook"))
+											{
+												bprint("R");
+											}
+											else
+											{
+												if ((eatloc.classname == "chess_queen"))
+												{
+													bprint("Q");
+												}
+												else
+												{
+													if ((eatloc.classname == "chess_king"))
+													{
+														bprint("K");
+													}
+												}
+											}
+										}
+									}
+								}
+								bprint(" [");
+							}
+							locx = GetX(current_dest_int);
+							if ((locx <= SECRET_1ST_DOWN))
+							{
+								bprint("Q");
+							}
+							else
+							{
+								if ((locx >= TE_LIGHTNING1))
+								{
+									bprint("K");
 								}
 							}
+							if (((locx == SPAWN_CRUCIFIED) || (locx == 8)))
+							{
+								bprint("R");
+							}
+							else
+							{
+								if (((locx == SPAWNFLAG_LASER) || (locx == TE_WIZSPIKE)))
+								{
+									bprint("Kt");
+								}
+								else
+								{
+									if (((locx == AS_MELEE) || (locx == TE_LIGHTNING2)))
+									{
+										bprint("B");
+									}
+								}
+							}
+							if ((current_selected.chess_team == "white"))
+							{
+								locy = GetY(current_dest_int);
+							}
+							else
+							{
+								locy = (TE_LIGHTNING3 - GetY(current_dest_int));
+							}
+							current_selected.location_str = ftos(locy);
+							bprint(current_selected.location_str);
+							if ((eatloc != world))
+							{
+								bprint("]");
+							}
+							bprint("\n");
 						}
-						if ((current_selected.chess_team == "white"))
-						{
-							locy = GetY(current_dest_int);
-						}
-						else
-						{
-							locy = (TE_LIGHTNING3 - GetY(current_dest_int));
-						}
-						current_selected.location_str = ftos(locy);
-						bprint(current_selected.location_str);
-						if ((eatloc != world))
-						{
-							bprint("]");
-						}
-						bprint("\n");
 					}
 					LastMoved = current_selected;
 					LastMovedLocation = current_dest_int;
@@ -1930,6 +1998,7 @@ entity(entity own) get_king =
 		}
 		trav = find(trav, classname, "chess_king");
 	}
+	return (world);
 };
 
 void() CheckersFinishMove =
@@ -1948,12 +2017,7 @@ void() CheckersFinishMove =
 		current_turn.frags = (current_turn.frags + 1);
 		current_turn.currentammo = current_turn.frags;
 	}
-	checkers_capture_entity = world;
-	checkers_capture_location = 0;
-	if ((current_selected != world))
-	{
-		current_selected.enemy = world;
-	}
+	CheckersClearCaptureTarget();
 	promoted = CheckersMaybePromote(self);
 	if (((checkers_was_jump && !promoted) && CheckersPieceCanJump(self)))
 	{
@@ -1971,8 +2035,7 @@ void() CheckersFinishMove =
 		mystuffcmd(current_turn, "bf\n");
 		return;
 	}
-	checkers_must_jump = FALSE;
-	checkers_was_jump = FALSE;
+	CheckersClearTurnState();
 	next_turn();
 };
 
@@ -1985,7 +2048,7 @@ void() CheckCheckersGameOver =
 	winner = current_turn.opponent;
 	action_flag = TRUE;
 	gameover = TRUE;
-	checkers_must_jump = FALSE;
+	CheckersClearTurnState();
 	if ((winner != world))
 	{
 		mycentreprint(winner, "YOU HAVE WON!");
@@ -2012,6 +2075,10 @@ void() next_turn =
 {
 	local entity king;
 
+	if (game_checkers)
+	{
+		CheckersClearTurnState();
+	}
 	if (!game_checkers)
 	{
 		king = get_king(current_turn.opponent);
@@ -2031,6 +2098,7 @@ void() next_turn =
 		current_turn.origin = current_turn.owner.origin;
 	}
 	light_ent.effects = MSG_BROADCAST;
+	ClearLastHighlight();
 	current_turn.chess_flags = (current_turn.chess_flags - (current_turn.chess_flags & CF_SELECTED_PIECE));
 	current_turn.chess_flags = (current_turn.chess_flags - (current_turn.chess_flags & CF_TIME_NOTIFY));
 	current_turn.chess_flags = (current_turn.chess_flags - (current_turn.chess_flags & CF_CHECK_NOTIFY));
