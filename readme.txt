@@ -29,8 +29,9 @@ QUICK START
 
     quake -game crownquake +teamplay 0 +checkers 1
 
-  Chess is the default. Set the "checkers" cvar before the match starts
-  to use checkers mode.
+  Chess is the default. The first active player also gets an on-screen
+  New Game menu for choosing Chess or Checkers. Set the "checkers" cvar
+  before the match starts to choose the default before that menu is used.
 
   Turns are untimed when "timelimit" is 0 or omitted. Set timelimit to a
   positive number of seconds to use a per-turn clock, for example:
@@ -47,7 +48,8 @@ CONTROLS
     M           - save current camera marker
     1-8         - go to camera marker
     P           - pass turn in chess mode
-    H           - help
+    H           - on-screen help
+    F2          - game menu, resign, rematch, or new game
     W           - toggle mouse in window mode
     F1          - display the board in text
 

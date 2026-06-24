@@ -419,6 +419,116 @@ void(string team_name) RemoveChessTeamPieces =
 	}
 };
 
+void(string team_name, string piece_class, float loc) SpawnChessPiece =
+{
+	local entity oldself;
+	local entity piece;
+
+	piece = spawn();
+	oldself = self;
+	self = piece;
+	self.classname = piece_class;
+	self.chess_team = team_name;
+	self.location = loc;
+	self.location_str = ftos(loc);
+	self.ischecker = FALSE;
+	self.isking = FALSE;
+	if ((team_name == "black"))
+	{
+		self.angles = '0 180 0';
+	}
+	else
+	{
+		self.angles = '0 0 0';
+	}
+	setorigin(self, LocationToVector(loc));
+	if ((piece_class == "chess_pawn"))
+	{
+		chess_pawn();
+	}
+	else
+	{
+		if ((piece_class == "chess_rook"))
+		{
+			chess_rook();
+		}
+		else
+		{
+			if ((piece_class == "chess_knight"))
+			{
+				chess_knight();
+			}
+			else
+			{
+				if ((piece_class == "chess_bishop"))
+				{
+					chess_bishop();
+				}
+				else
+				{
+					if ((piece_class == "chess_queen"))
+					{
+						chess_queen();
+					}
+					else
+					{
+						chess_king();
+					}
+				}
+			}
+		}
+	}
+	self.flags = (self.flags | FL_MONSTER);
+	self.takedamage = DAMAGE_AIM;
+	self.pausetime = 100000000;
+	self.use = monster_use;
+	self.classname = piece_class;
+	self.chess_team = team_name;
+	self.location = loc;
+	self.location_str = ftos(loc);
+	self.ischecker = FALSE;
+	self.isking = FALSE;
+	self.hasmoved = FALSE;
+	self = oldself;
+};
+
+void(string team_name, float y) SpawnChessBackRank =
+{
+	SpawnChessPiece(team_name, "chess_rook", (10 + y));
+	SpawnChessPiece(team_name, "chess_knight", (20 + y));
+	SpawnChessPiece(team_name, "chess_bishop", (30 + y));
+	SpawnChessPiece(team_name, "chess_queen", (40 + y));
+	SpawnChessPiece(team_name, "chess_king", (50 + y));
+	SpawnChessPiece(team_name, "chess_bishop", (60 + y));
+	SpawnChessPiece(team_name, "chess_knight", (70 + y));
+	SpawnChessPiece(team_name, "chess_rook", (80 + y));
+};
+
+void(string team_name, float y) SpawnChessPawns =
+{
+	local float x;
+
+	x = 1;
+	while ((x <= 8))
+	{
+		SpawnChessPiece(team_name, "chess_pawn", ((x * 10) + y));
+		x = (x + 1);
+	}
+};
+
+void() SpawnChessBoard =
+{
+	RemoveChessTeamPieces("white");
+	RemoveChessTeamPieces("black");
+	SpawnChessBackRank("white", 1);
+	SpawnChessPawns("white", 2);
+	SpawnChessPawns("black", 7);
+	SpawnChessBackRank("black", 8);
+	checkers_board_spawned = FALSE;
+	CheckersClearTurnState();
+	bprint("** crownquake chess mode: board spawned\n");
+};
+
 void() SpawnCheckersBoard =
 {
 	if (checkers_board_spawned)
@@ -436,6 +546,79 @@ void() SpawnCheckersBoard =
 	CheckersClearTurnState();
 	checkers_board_spawned = TRUE;
 	bprint("** crownquake checkers mode: board spawned\n");
+};
+
+void(float use_checkers) ResetGameToMode =
+{
+	game_checkers = use_checkers;
+	gameover = FALSE;
+	action_flag = FALSE;
+	king_dead = FALSE;
+	ralcheckmate = FALSE;
+	Queening = MSG_BROADCAST;
+	QueenEnt = world;
+	QueenTo = "";
+	current_enemy = world;
+	current_selected = world;
+	current_dest_int = MSG_BROADCAST;
+	LastMoved = world;
+	LastMovedLocation = MSG_BROADCAST;
+	movenum = MSG_BROADCAST;
+	if ((GetBody != world))
+	{
+		remove(GetBody);
+		GetBody = world;
+	}
+	if ((light_ent != world))
+	{
+		light_ent.effects = MSG_BROADCAST;
+	}
+	ClearLastHighlight();
+	if (game_checkers)
+	{
+		checkers_board_spawned = FALSE;
+		SpawnCheckersBoard();
+	}
+	else
+	{
+		SpawnChessBoard();
+	}
+	if ((player1 != world))
+	{
+		player1.frags = MSG_BROADCAST;
+		player1.currentammo = MSG_BROADCAST;
+		player1.chess_flags = MSG_BROADCAST;
+		player1.skin = 1;
+		AllocateMonsters(player1);
+	}
+	if ((player2 != world))
+	{
+		player2.frags = MSG_BROADCAST;
+		player2.currentammo = MSG_BROADCAST;
+		player2.chess_flags = MSG_BROADCAST;
+		player2.skin = 1;
+		AllocateMonsters(player2);
+	}
+	if ((player2 != world))
+	{
+		current_turn = player2;
+	}
+	else
+	{
+		current_turn = player1;
+	}
+	if ((current_turn != world))
+	{
+		current_turn.turn_starttime = time;
+		if (single_player)
+		{
+			setorigin(current_turn.owner, current_turn.origin);
+			current_turn.owner.angles = current_turn.angles;
+			current_turn.owner.fixangle = TRUE;
+		}
+		mycentreprint(current_turn, "New game\n");
+		mystuffcmd(current_turn, "bf\n");
+	}
 };
 
 float(entity ent, float loc) CheckersCanStepTo =
@@ -1943,6 +2126,12 @@ void() welcome_mesg =
 	sprint(self.owner, "H for a list of keys\n");
 	stuffcmd(self.owner, "crosshair 1\n");
 	stuffcmd(self.owner, "bind F1 \"impulse 241\"\n");
+	stuffcmd(self.owner, "bind F2 \"impulse 242\"\n");
+	stuffcmd(self.owner, "bind h \"impulse 200\"\n");
+	if (!self.owner.spectator)
+	{
+		Menu_OpenStartupModeSelect();
+	}
 	if (self.owner.spectator)
 	{
 		sprint(self.owner, "** ");
@@ -2069,6 +2258,7 @@ void() CheckCheckersGameOver =
 		bprint("opponent");
 	}
 	bprint(" wins\n");
+	Menu_OpenGameOver(winner);
 };
 
 void() next_turn =
@@ -2218,6 +2408,7 @@ void() CheckGameOver =
 	local entity ent2;
 	local entity e1trav;
 	local entity e2trav;
+	local entity winner;
 	local float found;
 
 	if (!king_dead)
@@ -2226,6 +2417,13 @@ void() CheckGameOver =
 		king_dead = TRUE;
 		sound(self, CHAN_AUTO, "boss1/death.wav", SPAWN_CRUCIFIED, ATTN_NONE);
 		action_flag = TRUE;
+		gameover = TRUE;
+		winner = world;
+		if ((self.owner != world))
+		{
+			winner = self.owner.opponent;
+		}
+		Menu_OpenGameOver(winner);
 		found = FALSE;
 		e1trav = find(world, chess_team, "white");
 		while (((e1trav != world) && !found))
@@ -2327,7 +2525,7 @@ void() CheckGameOver =
 			if ((self.owner.flags & FL_CLIENT))
 			{
 				mycentreprint(self.owner, "You have lost..");
-				self.owner.opponent.skin = MSG_BROADCAST;
+				self.owner.skin = MSG_BROADCAST;
 			}
 		}
 	}
@@ -2383,16 +2581,33 @@ float(entity ent, entity ignore) CanDie =
 	return (FALSE);
 };
 
+void(entity ent, string msg) MenuSafeCenterPrint =
+{
+	if ((ent == world))
+	{
+		return;
+	}
+	if (ent.menu_screen)
+	{
+		return;
+	}
+	centerprint(ent, msg);
+};
+
 void(entity ent, string msg) mycentreprint =
 {
+	if ((ent == world))
+	{
+		return;
+	}
 	ent.last_message = msg;
 	if ((ent.classname == "info_player_start"))
 	{
-		centerprint(ent.owner, msg);
+		MenuSafeCenterPrint(ent.owner, msg);
 	}
 	else
 	{
-		centerprint(ent, msg);
+		MenuSafeCenterPrint(ent, msg);
 	}
 };
 

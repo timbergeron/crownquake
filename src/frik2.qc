@@ -277,7 +277,10 @@ void() CheckOrMate =
 		bprint("** ");
 		bprint(current_turn.chess_team);
 		bprint(" has won the game!\n");
+		gameover = TRUE;
+		action_flag = TRUE;
 		ralcheckmate = TRUE;
+		Menu_OpenGameOver(current_turn);
 	}
 };
 

@@ -883,7 +883,7 @@ void() sigil_touch =
 	{
 		return;
 	}
-	centerprint(other, "You got the rune!");
+	MenuSafeCenterPrint(other, "You got the rune!");
 	sound(other, CHAN_ITEM, self.noise, LASERTARG_ON, ATTN_NORM);
 	stuffcmd(other, "bf\n");
 	self.solid = SOLID_NOT;

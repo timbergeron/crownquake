@@ -190,23 +190,23 @@ void() counter_use =
 		{
 			if ((self.count >= DOOR_DONT_LINK))
 			{
-				centerprint(activator, "There are more to go...");
+				MenuSafeCenterPrint(activator, "There are more to go...");
 			}
 			else
 			{
 				if ((self.count == AS_MELEE))
 				{
-					centerprint(activator, "Only 3 more to go...");
+					MenuSafeCenterPrint(activator, "Only 3 more to go...");
 				}
 				else
 				{
 					if ((self.count == WEAPON_ROCKET))
 					{
-						centerprint(activator, "Only 2 more to go...");
+						MenuSafeCenterPrint(activator, "Only 2 more to go...");
 					}
 					else
 					{
-						centerprint(activator, "Only 1 more to go...");
+						MenuSafeCenterPrint(activator, "Only 1 more to go...");
 					}
 				}
 			}
@@ -215,7 +215,7 @@ void() counter_use =
 	}
 	if (((activator.classname == "player") && ((self.spawnflags & SPAWNFLAG_NOMESSAGE) == MSG_BROADCAST)))
 	{
-		centerprint(activator, "Sequence completed!");
+		MenuSafeCenterPrint(activator, "Sequence completed!");
 	}
 	self.enemy = activator;
 	multi_trigger();
@@ -427,7 +427,7 @@ void() trigger_onlyregistered_touch =
 	{
 		if ((self.message != ""))
 		{
-			centerprint(other, self.message);
+			MenuSafeCenterPrint(other, self.message);
 			sound(other, CHAN_BODY, "misc/talk.wav", 1, ATTN_NORM);
 		}
 	}

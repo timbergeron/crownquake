@@ -1111,6 +1111,24 @@ void() ImpulseCommands =
 {
 	local entity checklight;
 
+	if (self.menu_screen)
+	{
+		Menu_Select(self.impulse);
+		self.impulse = MSG_BROADCAST;
+		return;
+	}
+	if ((self.impulse == 242))
+	{
+		Menu_Open(MENU_SCREEN_PAUSE);
+		self.impulse = MSG_BROADCAST;
+		return;
+	}
+	if ((self.impulse == 200))
+	{
+		Menu_Open(MENU_SCREEN_HELP);
+		self.impulse = MSG_BROADCAST;
+		return;
+	}
 	if (((self.impulse >= 1) && (self.impulse <= WEAPON_BIG)))
 	{
 		DoMarker(self.impulse);
@@ -1158,28 +1176,28 @@ void() ImpulseCommands =
 				if ((QueenTo == "chess_queen"))
 				{
 					QueenTo = "chess_rook";
-					centerprint(self, "Promoting to: Rook\n");
+					MenuSafeCenterPrint(self, "Promoting to: Rook\n");
 				}
 				else
 				{
 					if ((QueenTo == "chess_rook"))
 					{
 						QueenTo = "chess_knight";
-						centerprint(self, "Promoting to: Knight\n");
+						MenuSafeCenterPrint(self, "Promoting to: Knight\n");
 					}
 					else
 					{
 						if ((QueenTo == "chess_knight"))
 						{
 							QueenTo = "chess_bishop";
-							centerprint(self, "Promoting to: Bishop\n");
+							MenuSafeCenterPrint(self, "Promoting to: Bishop\n");
 						}
 						else
 						{
 							if ((QueenTo == "chess_bishop"))
 							{
 								QueenTo = "chess_queen";
-								centerprint(self, "Promoting to: Queen\n");
+								MenuSafeCenterPrint(self, "Promoting to: Queen\n");
 							}
 						}
 					}
@@ -1189,7 +1207,7 @@ void() ImpulseCommands =
 			}
 			if ((game_checkers && checkers_must_jump))
 			{
-				centerprint(self, "You must finish the jump\n");
+				MenuSafeCenterPrint(self, "You must finish the jump\n");
 				self.impulse = MSG_BROADCAST;
 				return;
 			}
@@ -1198,7 +1216,7 @@ void() ImpulseCommands =
 				current_turn.chess_flags = (current_turn.chess_flags - CF_SELECTED_PIECE);
 				light_ent.effects = MSG_BROADCAST;
 				mystuffcmd(self, "play effects/button.wav\n");
-				centerprint(self, "Selection cleared\n");
+				MenuSafeCenterPrint(self, "Selection cleared\n");
 				FindLocation();
 				checklight = EntityAtLoc(current_dest_int);
 				if (((last_highlight != world) && (checklight.owner != current_turn)))
@@ -1263,31 +1281,10 @@ void() ImpulseCommands =
 				{
 					if ((self.impulse == 199))
 					{
-						centerprint(self, self.last_message);
+						MenuSafeCenterPrint(self, self.last_message);
 					}
 				}
 			}
-		}
-	}
-	if ((self.impulse == 200))
-	{
-		sprint(self, "\nW         Toggle Mouse\n");
-		sprint(self, "C         Toggle camera\n");
-		sprint(self, "M         Place camera marker\n");
-		sprint(self, "1-8       Go to camera marker\n");
-		sprint(self, "F1        Display board in text\n");
-		if (!self.spectator)
-		{
-			sprint(self, "R         Show last message\n");
-			if (game_checkers)
-			{
-				sprint(self, "P         Pass disabled in checkers\n");
-			}
-			else
-			{
-				sprint(self, "P         Pass turn\n");
-			}
-			sprint(self, "Del       Unselect lighted piece\n");
 		}
 	}
 	self.impulse = MSG_BROADCAST;
@@ -1297,6 +1294,15 @@ void() W_WeaponFrame =
 {
 	local float time_left;
 
+	if (((self.menu_screen || (self.impulse == 242)) || (self.impulse == 200)))
+	{
+		if ((self.impulse > MSG_BROADCAST))
+		{
+			ImpulseCommands();
+		}
+		Menu_Render();
+		return;
+	}
 	if (((time_per_turn > MSG_BROADCAST) && (current_turn != world)))
 	{
 		time_left = ceil((time_per_turn - (time - current_turn.turn_starttime)));

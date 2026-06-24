@@ -969,7 +969,7 @@ void() PlayerPreThink =
 	}
 	self.oldorigin = self.origin;
 	self.last_vel = self.velocity;
-	if ((((current_turn == self) || single_player) && !action_flag))
+	if (((((current_turn == self) || single_player) && !action_flag) && !self.menu_screen))
 	{
 		if ((((time_per_turn > 25) && (current_turn.turn_starttime < ((time - time_per_turn) + 15))) && !(current_turn.chess_flags & CF_TIME_NOTIFY)))
 		{

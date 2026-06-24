@@ -130,6 +130,12 @@ float checkers_must_jump;
 float checkers_was_jump;
 entity checkers_capture_entity;
 float checkers_capture_location;
+float MENU_SCREEN_NONE;
+float MENU_SCREEN_PAUSE = 1;
+float MENU_SCREEN_HELP = 2;
+float MENU_SCREEN_GAMEOVER = 3;
+float MENU_SCREEN_NEWGAME = 4;
+float menu_startup_shown;
 .float chess_flags;
 .string chess_team;
 .float location;
@@ -138,6 +144,12 @@ float checkers_capture_location;
 .float isking;
 .float last_voice;
 .entity last_voice_entity;
+.float menu_screen;
+.float menu_cursor;
+.float menu_refresh;
+.float menu_open_time;
+.float menu_return_screen;
+.entity menu_winner;
 .entity opponent;
 .vector last_vel;
 .float last_vel_x;
@@ -182,7 +194,10 @@ entity(entity monst) FindNewEnemy;
 void(float loc) HighlightLocation;
 void() CheckGameOver;
 void() CheckersFinishMove;
+void() CheckersClearTurnState;
 void() SpawnCheckersBoard;
+void() SpawnChessBoard;
+void(float use_checkers) ResetGameToMode;
 float(entity ent) CheckersPieceCanJump;
 float(entity side_owner) CheckersAnyCaptureAvailable;
 float(entity side_owner) CheckersSideHasLegalMove;
@@ -190,8 +205,17 @@ void() CheckCheckersGameOver;
 void(entity plyr) UpdateMonsterColors;
 float(entity ent, entity ignore) CanDie;
 entity(entity own) get_king;
+void(entity ent, string msg) MenuSafeCenterPrint;
 void(entity ent, string msg) mycentreprint;
 void(entity ent, string cmd) mystuffcmd;
+void(float screen) Menu_Open;
+void() Menu_Close;
+void(float imp) Menu_Select;
+float() Menu_Render;
+void(entity winner) Menu_OpenGameOver;
+void(entity loser) Menu_ResignSide;
+void() Menu_OpenStartupModeSelect;
+void() ClearLastHighlight;
 
 void() SUB_Null =
 {
@@ -358,7 +382,7 @@ void() SUB_UseTargets =
 	}
 	if (((activator.classname == "player") && (self.message != "")))
 	{
-		centerprint(activator, self.message);
+		MenuSafeCenterPrint(activator, self.message);
 		if (!self.noise)
 		{
 			sound(activator, CHAN_VOICE, "misc/talk.wav", LASERTARG_ON, ATTN_NORM);
