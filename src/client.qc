@@ -357,6 +357,11 @@ entity() SelectSpawnPoint =
 };
 void() PlayerDie;
 
+float() PregameFlyActive =
+{
+	return (menu_startup_pending || (((current_turn == world) && (player2 == world)) && (message_entity != world)));
+};
+
 void() PutClientInServer =
 {
 	local entity spot;
@@ -469,15 +474,18 @@ void() PutClientInServer =
 			self.fixangle = TRUE;
 			current_turn.turn_starttime = time;
 			current_selected = world;
-			mycentreprint(current_turn, "Current Turn: White");
-			mystuffcmd(current_turn, "bf\n");
-			if ((random() < 0.5))
+			action_flag = TRUE;
+			if (Menu_ResumeRestartSelection())
 			{
-				mystuffcmd(current_turn, "play buttons/switch02.wav\n");
+			}
+			else if ((game_checkers && ((floor(cvar("bot")) == 1) || (floor(cvar("bot")) == 2))))
+			{
+				menu_startup_shown = TRUE;
+				Menu_StartNewGame(TRUE);
 			}
 			else
 			{
-				mystuffcmd(current_turn, "play buttons/switch04.wav\n");
+				Menu_OpenStartupModeSelect();
 			}
 		}
 		else
@@ -492,7 +500,10 @@ void() PutClientInServer =
 				AllocateMonsters(self);
 				if ((single_player == MSG_BROADCAST))
 				{
-					message_entity.nextthink = MSG_BROADCAST;
+					if ((message_entity != world))
+					{
+						message_entity.nextthink = MSG_BROADCAST;
+					}
 					self.opponent = player1;
 					player1.opponent = self;
 				}
@@ -501,8 +512,9 @@ void() PutClientInServer =
 					current_turn = self;
 					self.opponent = self;
 				}
-				if ((single_player == MSG_BROADCAST))
+				if (((single_player == MSG_BROADCAST) && !menu_startup_pending))
 				{
+					Menu_RestoreGameBindsAll();
 					if ((random() < 0.5))
 					{
 						current_turn = self;
@@ -524,7 +536,15 @@ void() PutClientInServer =
 						mystuffcmd(current_turn, "play buttons/switch04.wav\n");
 					}
 				}
-				action_flag = MSG_BROADCAST;
+				if (menu_startup_pending)
+				{
+					action_flag = TRUE;
+					Menu_EnablePregameFlyBinds(self);
+				}
+				else
+				{
+					action_flag = MSG_BROADCAST;
+				}
 			}
 			else
 			{
@@ -533,11 +553,11 @@ void() PutClientInServer =
 				self.chess_team = spot.chess_team;
 				remove(spot);
 				AllocateMonsters(self);
-				message_entity = spawn();
-				message_text = "Waiting for other player..";
-				message_target = self;
-				message_entity.think = message_think;
-				message_entity.nextthink = (time + 0.1);
+				action_flag = TRUE;
+				if (!Menu_ResumeRestartSelection())
+				{
+					Menu_OpenStartupModeSelect();
+				}
 			}
 		}
 	}
@@ -886,12 +906,13 @@ void() PlayerPreThink =
 	local float mspeed;
 	local float aspeed;
 	local float r;
-	local float vel_speed;
 	local float old_vel_speed;
 	local float diff;
 	local float ftemp;
 	local float old_loc;
+	local float pregame_fly;
 	local vector vdiff;
+	local float fly_speed;
 
 	if (intermission_running)
 	{
@@ -917,59 +938,49 @@ void() PlayerPreThink =
 	{
 		return;
 	}
+	pregame_fly = PregameFlyActive();
+	if (pregame_fly)
+	{
+		self.movetype = MOVETYPE_NOCLIP;
+		self.finaldest_y = MOVETYPE_NOCLIP;
+		self.solid = SOLID_NOT;
+		self.flags = (self.flags | FL_FLY);
+		self.flags = (self.flags | FL_GODMODE);
+		self.flags = (self.flags | FL_SWIM);
+		self.flags = (self.flags | FL_ONGROUND);
+		self.waterlevel = MSG_BROADCAST;
+	}
+	else if (((self.movetype == MOVETYPE_NOCLIP) && !self.spectator))
+	{
+		self.movetype = MOVETYPE_FLY;
+		self.finaldest_y = MOVETYPE_FLY;
+	}
 	if ((self.flags & FL_FLY))
 	{
 		if ((self.flags & FL_ONGROUND))
 		{
 			self.flags = (self.flags - FL_ONGROUND);
 		}
+		makevectors(self.v_angle);
+		self.velocity = ((v_forward * self.movement_x) + (v_right * self.movement_y));
+		self.velocity_z = (self.velocity_z + self.movement_z);
 		if (self.button2)
 		{
-			self.speed = (self.speed + (100 * frametime));
-			if ((self.speed > 150))
-			{
-				self.speed = 150;
-			}
-			self.flags = (self.flags | FL_JUMP);
-			CameraPos();
-			self.velocity = (self.dest - self.origin);
-			vel_speed = vlen(self.velocity);
-			if ((vel_speed < 100))
-			{
-				self.velocity = (normalize(self.velocity) * vel_speed);
-			}
-			else
-			{
-				self.velocity = (normalize(self.velocity) * self.speed);
-			}
+			self.velocity_z = (self.velocity_z + 200);
 		}
-		else
+		fly_speed = vlen(self.velocity);
+		if ((fly_speed > 2000))
 		{
-			if (self.button0)
-			{
-				makevectors(self.v_angle);
-				self.velocity = (self.velocity + ((v_forward * 200) * frametime));
-				self.speed = vlen(self.velocity);
-				if ((self.speed > 100))
-				{
-					self.velocity = (normalize(self.velocity) * 100);
-				}
-			}
-			else
-			{
-				self.flags = (self.flags | FL_JUMPRELEASED);
-				self.speed = (self.speed - (150 * frametime));
-				if ((self.speed < MSG_BROADCAST))
-				{
-					self.speed = MSG_BROADCAST;
-				}
-				self.velocity = (normalize(self.velocity) * self.speed);
-			}
+			self.velocity = (normalize(self.velocity) * 2000);
 		}
 	}
 	self.oldorigin = self.origin;
 	self.last_vel = self.velocity;
-	if (((((current_turn == self) || single_player) && !action_flag) && !self.menu_screen))
+	if (pregame_fly)
+	{
+		return;
+	}
+	if ((((((current_turn != world) && ((current_turn == self) || single_player)) && !current_turn.is_bot) && !action_flag) && !self.menu_screen))
 	{
 		if ((((time_per_turn > 25) && (current_turn.turn_starttime < ((time - time_per_turn) + 15))) && !(current_turn.chess_flags & CF_TIME_NOTIFY)))
 		{
@@ -1159,7 +1170,11 @@ void() PlayerPostThink =
 	{
 		return;
 	}
-	if ((self.flags & FL_FLY))
+	if (PregameFlyActive())
+	{
+		setorigin(self, (self.origin + (self.last_vel * frametime)));
+	}
+	else if ((self.flags & FL_FLY))
 	{
 		traceline(self.origin, (self.origin + (self.last_vel * frametime)), TRUE, world);
 		if ((trace_fraction == 1))
@@ -1178,7 +1193,7 @@ void() PlayerPostThink =
 	{
 		self.origin_z = MSG_BROADCAST;
 	}
-	if (single_player)
+	if ((single_player && (current_turn != world)))
 	{
 		setorigin(current_turn, self.origin);
 		current_turn.angles = self.v_angle;

@@ -1164,6 +1164,12 @@ void() ImpulseCommands =
 	}
 	if ((self.spectator != TRUE))
 	{
+		if (((((game_checkers && !gameover) && (current_turn != world)) && current_turn.is_bot) && (((self.impulse == 20) || (self.impulse == 60)) || (self.impulse == 100))))
+		{
+			centerprint(self, "Computer is thinking\n");
+			self.impulse = MSG_BROADCAST;
+			return;
+		}
 		if ((self.impulse == 20))
 		{
 			if ((!single_player && (self != current_turn)))
@@ -1176,28 +1182,28 @@ void() ImpulseCommands =
 				if ((QueenTo == "chess_queen"))
 				{
 					QueenTo = "chess_rook";
-					MenuSafeCenterPrint(self, "Promoting to: Rook\n");
+					centerprint(self, "Promoting to: Rook\n");
 				}
 				else
 				{
 					if ((QueenTo == "chess_rook"))
 					{
 						QueenTo = "chess_knight";
-						MenuSafeCenterPrint(self, "Promoting to: Knight\n");
+						centerprint(self, "Promoting to: Knight\n");
 					}
 					else
 					{
 						if ((QueenTo == "chess_knight"))
 						{
 							QueenTo = "chess_bishop";
-							MenuSafeCenterPrint(self, "Promoting to: Bishop\n");
+							centerprint(self, "Promoting to: Bishop\n");
 						}
 						else
 						{
 							if ((QueenTo == "chess_bishop"))
 							{
 								QueenTo = "chess_queen";
-								MenuSafeCenterPrint(self, "Promoting to: Queen\n");
+								centerprint(self, "Promoting to: Queen\n");
 							}
 						}
 					}
@@ -1207,16 +1213,16 @@ void() ImpulseCommands =
 			}
 			if ((game_checkers && checkers_must_jump))
 			{
-				MenuSafeCenterPrint(self, "You must finish the jump\n");
+				centerprint(self, "You must finish the jump\n");
 				self.impulse = MSG_BROADCAST;
 				return;
 			}
 			if ((current_turn.chess_flags & CF_SELECTED_PIECE))
 			{
 				current_turn.chess_flags = (current_turn.chess_flags - CF_SELECTED_PIECE);
-				light_ent.effects = MSG_BROADCAST;
+				ClearSelectionEffect();
 				mystuffcmd(self, "play effects/button.wav\n");
-				MenuSafeCenterPrint(self, "Selection cleared\n");
+				mysprint(self, "Selection cleared\n");
 				FindLocation();
 				checklight = EntityAtLoc(current_dest_int);
 				if (((last_highlight != world) && (checklight.owner != current_turn)))
@@ -1281,10 +1287,31 @@ void() ImpulseCommands =
 				{
 					if ((self.impulse == 199))
 					{
-						MenuSafeCenterPrint(self, self.last_message);
+						centerprint(self, self.last_message);
 					}
 				}
 			}
+		}
+	}
+	if ((self.impulse == 200))
+	{
+		sprint(self, "\nW         Toggle Mouse\n");
+		sprint(self, "C         Toggle camera\n");
+		sprint(self, "M         Place camera marker\n");
+		sprint(self, "1-8       Go to camera marker\n");
+		sprint(self, "F1        Display board in text\n");
+		if (!self.spectator)
+		{
+			sprint(self, "R         Show last message\n");
+			if (game_checkers)
+			{
+				sprint(self, "P         Pass disabled in checkers\n");
+			}
+			else
+			{
+				sprint(self, "P         Pass turn\n");
+			}
+			sprint(self, "Del       Unselect lighted piece\n");
 		}
 	}
 	self.impulse = MSG_BROADCAST;
@@ -1360,12 +1387,13 @@ void() SDR_SightThink =
 	}
 	if (trace_ent.takedamage)
 	{
-		setmodel(self, "progs/cross2.mdl");
+		self.scale = 0.75;
 	}
 	else
 	{
-		setmodel(self, "progs/cross1.mdl");
+		self.scale = 0.5;
 	}
+	setmodel(self, "progs/s_light.spr");
 	self.angles = vectoangles(v_forward);
 	setorigin(self, trace_endpos);
 	self.nextthink = (time + 0.05);
@@ -1410,7 +1438,8 @@ void(entity targ_owner) LaserTargeterToggle =
 	e.owner = targ_owner;
 	e.movetype = MOVETYPE_NONE;
 	e.solid = SOLID_NOT;
-	setmodel(e, "progs/s_bubble.spr");
+	setmodel(e, "progs/s_light.spr");
+	e.scale = 0.5;
 	setsize(e, '0 0 0', '0 0 0');
 	setorigin(e, e.owner.origin);
 	targ_owner.pointer = e;

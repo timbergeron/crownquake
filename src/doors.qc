@@ -164,7 +164,7 @@ void() door_touch =
 	self.owner.attack_finished = (time + WEAPON_ROCKET);
 	if ((self.owner.message != ""))
 	{
-		MenuSafeCenterPrint(other, self.owner.message);
+		centerprint(other, self.owner.message);
 		sound(other, CHAN_VOICE, "misc/talk.wav", 1, ATTN_NORM);
 	}
 	if (!self.items)
@@ -177,21 +177,21 @@ void() door_touch =
 		{
 			if ((world.worldtype == WEAPON_ROCKET))
 			{
-				MenuSafeCenterPrint(other, "You need the silver keycard");
+				centerprint(other, "You need the silver keycard");
 				sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 			}
 			else
 			{
 				if ((world.worldtype == 1))
 				{
-					MenuSafeCenterPrint(other, "You need the silver runekey");
+					centerprint(other, "You need the silver runekey");
 					sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 				}
 				else
 				{
 					if ((world.worldtype == MSG_BROADCAST))
 					{
-						MenuSafeCenterPrint(other, "You need the silver key");
+						centerprint(other, "You need the silver key");
 						sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 					}
 				}
@@ -201,21 +201,21 @@ void() door_touch =
 		{
 			if ((world.worldtype == WEAPON_ROCKET))
 			{
-				MenuSafeCenterPrint(other, "You need the gold keycard");
+				centerprint(other, "You need the gold keycard");
 				sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 			}
 			else
 			{
 				if ((world.worldtype == 1))
 				{
-					MenuSafeCenterPrint(other, "You need the gold runekey");
+					centerprint(other, "You need the gold runekey");
 					sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 				}
 				else
 				{
 					if ((world.worldtype == MSG_BROADCAST))
 					{
-						MenuSafeCenterPrint(other, "You need the gold key");
+						centerprint(other, "You need the gold key");
 						sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
 					}
 				}
@@ -643,7 +643,7 @@ void() secret_touch =
 	self.attack_finished = (time + WEAPON_ROCKET);
 	if (self.message)
 	{
-		MenuSafeCenterPrint(other, self.message);
+		centerprint(other, self.message);
 		sound(other, CHAN_BODY, "misc/talk.wav", 1, ATTN_NORM);
 	}
 };

@@ -208,22 +208,6 @@ void() FindSelection =
 	}
 };
 
-void() CameraPos =
-{
-	local vector ideal_pos;
-	local vector ideal_vec;
-	local float ideal_len;
-	local float ideal_vec_len;
-
-	makevectors(self.v_angle);
-	ideal_pos = (v_forward * -350);
-	if ((ideal_pos_z < MSG_BROADCAST))
-	{
-		ideal_pos_z = MSG_BROADCAST;
-	}
-	self.dest = ideal_pos;
-};
-
 void(entity plyr) AllocateMonsters =
 {
 	local entity monst;
@@ -304,6 +288,42 @@ float(float loc) CheckersOnBoard =
 	return (((x >= 1) && (x <= 8)) && ((y >= 1) && (y <= 8)));
 };
 
+void() ClearSelectionEffect =
+{
+	if ((selection_effect_piece != world))
+	{
+		selection_effect_piece.effects = (selection_effect_piece.effects - (selection_effect_piece.effects & EF_RED));
+		selection_effect_piece = world;
+	}
+	if ((light_ent != world))
+	{
+		light_ent.effects = MSG_BROADCAST;
+	}
+};
+
+void(entity piece) ShowSelectionEffect =
+{
+	ClearSelectionEffect();
+	if ((piece == world))
+	{
+		return;
+	}
+	if (cvar("pr_checkextension"))
+	{
+		if (checkextension("DP_EF_RED"))
+		{
+			piece.effects = (piece.effects | EF_RED);
+			selection_effect_piece = piece;
+			return;
+		}
+	}
+	if ((light_ent != world))
+	{
+		setorigin(light_ent, (piece.origin + '0 0 96'));
+		light_ent.effects = EF_DIMLIGHT;
+	}
+};
+
 void() CheckersClearCaptureTarget =
 {
 	checkers_capture_entity = world;
@@ -319,6 +339,7 @@ void() CheckersClearTurnState =
 	checkers_must_jump = FALSE;
 	checkers_was_jump = FALSE;
 	CheckersClearCaptureTarget();
+	ClearSelectionEffect();
 	current_selected = world;
 };
 
@@ -338,11 +359,11 @@ void(string team_name, float loc) SpawnCheckerMan =
 	self.isking = FALSE;
 	if ((team_name == "black"))
 	{
-		self.angles = '0 180 0';
+		self.angles = '0 270 0';
 	}
 	else
 	{
-		self.angles = '0 0 0';
+		self.angles = '0 90 0';
 	}
 	setorigin(self, LocationToVector(loc));
 	monster_knight();
@@ -435,11 +456,11 @@ void(string team_name, string piece_class, float loc) SpawnChessPiece =
 	self.isking = FALSE;
 	if ((team_name == "black"))
 	{
-		self.angles = '0 180 0';
+		self.angles = '0 270 0';
 	}
 	else
 	{
-		self.angles = '0 0 0';
+		self.angles = '0 90 0';
 	}
 	setorigin(self, LocationToVector(loc));
 	if ((piece_class == "chess_pawn"))
@@ -550,6 +571,7 @@ void() SpawnCheckersBoard =
 
 void(float use_checkers) ResetGameToMode =
 {
+	ClearSelectionEffect();
 	game_checkers = use_checkers;
 	gameover = FALSE;
 	action_flag = FALSE;
@@ -568,10 +590,6 @@ void(float use_checkers) ResetGameToMode =
 	{
 		remove(GetBody);
 		GetBody = world;
-	}
-	if ((light_ent != world))
-	{
-		light_ent.effects = MSG_BROADCAST;
 	}
 	ClearLastHighlight();
 	if (game_checkers)
@@ -599,6 +617,7 @@ void(float use_checkers) ResetGameToMode =
 		player2.skin = 1;
 		AllocateMonsters(player2);
 	}
+	CheckersApplyBotCvars();
 	if ((player2 != world))
 	{
 		current_turn = player2;
@@ -610,7 +629,7 @@ void(float use_checkers) ResetGameToMode =
 	if ((current_turn != world))
 	{
 		current_turn.turn_starttime = time;
-		if (single_player)
+		if ((single_player && !current_turn.is_bot))
 		{
 			setorigin(current_turn.owner, current_turn.origin);
 			current_turn.owner.angles = current_turn.angles;
@@ -619,6 +638,7 @@ void(float use_checkers) ResetGameToMode =
 		mycentreprint(current_turn, "New game\n");
 		mystuffcmd(current_turn, "bf\n");
 	}
+	CheckersMaybeScheduleBotTurn();
 };
 
 float(entity ent, float loc) CheckersCanStepTo =
@@ -739,6 +759,29 @@ float(entity ent) CheckersPieceCanJump =
 	return (FALSE);
 };
 
+entity(entity side_owner) CheckersFirstCapturePiece =
+{
+	local entity trav;
+
+	if ((side_owner == world))
+	{
+		return (world);
+	}
+	trav = find(world, chess_team, side_owner.chess_team);
+	while ((trav != world))
+	{
+		if ((((trav.flags & FL_MONSTER) && (trav.health > 0)) && trav.ischecker))
+		{
+			if (CheckersPieceCanJump(trav))
+			{
+				return (trav);
+			}
+		}
+		trav = find(trav, chess_team, side_owner.chess_team);
+	}
+	return (world);
+};
+
 float(entity ent) CheckersPieceCanStep =
 {
 	if (((ent == world) || !ent.ischecker))
@@ -766,25 +809,7 @@ float(entity ent) CheckersPieceCanStep =
 
 float(entity side_owner) CheckersAnyCaptureAvailable =
 {
-	local entity trav;
-
-	if ((side_owner == world))
-	{
-		return (FALSE);
-	}
-	trav = find(world, chess_team, side_owner.chess_team);
-	while ((trav != world))
-	{
-		if ((((trav.flags & FL_MONSTER) && (trav.health > 0)) && trav.ischecker))
-		{
-			if (CheckersPieceCanJump(trav))
-			{
-				return (TRUE);
-			}
-		}
-		trav = find(trav, chess_team, side_owner.chess_team);
-	}
-	return (FALSE);
+	return (CheckersFirstCapturePiece(side_owner) != world);
 };
 
 float(entity side_owner) CheckersSideHasLegalMove =
@@ -836,6 +861,38 @@ float(entity ent) CheckersMaybePromote =
 	return (FALSE);
 };
 
+void(entity ent, float loc, string reason) CheckersDebugInvalidMove =
+{
+	if (!cvar("cq_debug"))
+	{
+		return;
+	}
+	bprint("** CHECKERS DEBUG: invalid reason=");
+	bprint(reason);
+	bprint(" team=");
+	bprint(ent.chess_team);
+	bprint(" piece=");
+	bprint(ftos(ent.location));
+	bprint(" dest=");
+	bprint(ftos(loc));
+	bprint(" king=");
+	bprint(ftos(ent.isking));
+	bprint(" must_jump=");
+	bprint(ftos(checkers_must_jump));
+	bprint(" any_capture=");
+	bprint(ftos(CheckersAnyCaptureAvailable(ent.owner)));
+	bprint(" forced_piece=");
+	if ((current_selected != world))
+	{
+		bprint(ftos(current_selected.location));
+	}
+	else
+	{
+		bprint("none");
+	}
+	bprint("\n");
+};
+
 float(entity ent, float loc, entity at_loc, float actual_move) CheckersValidMove =
 {
 	local float oldx;
@@ -847,27 +904,49 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckersValidMove
 
 	if (actual_move)
 	{
+		checkers_invalid_notified = FALSE;
 		CheckersClearCaptureTarget();
 		checkers_was_jump = FALSE;
 		ent.enemy = world;
 	}
 	if (!ent.ischecker)
 	{
+		if (actual_move)
+		{
+			CheckersDebugInvalidMove(ent, loc, "not-checker");
+		}
 		return (FALSE);
 	}
 	if (!CheckersOnBoard(loc))
 	{
+		if (actual_move)
+		{
+			CheckersDebugInvalidMove(ent, loc, "off-board");
+		}
 		return (FALSE);
 	}
 	if ((at_loc != world))
 	{
+		if (actual_move)
+		{
+			CheckersDebugInvalidMove(ent, loc, "occupied");
+		}
 		return (FALSE);
 	}
 	if ((checkers_must_jump && (ent != current_selected)))
 	{
 		if (actual_move)
 		{
-			mycentreprint(ent.owner, "You must finish the jump");
+			checkers_invalid_notified = TRUE;
+		}
+		return (FALSE);
+	}
+	if ((!checkers_must_jump && CheckersAnyCaptureAvailable(ent.owner)) && !CheckersCanJumpTo(ent, loc))
+	{
+		if (actual_move)
+		{
+			checkers_invalid_notified = TRUE;
+			CheckersDebugInvalidMove(ent, loc, "mandatory-capture");
 		}
 		return (FALSE);
 	}
@@ -877,7 +956,7 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckersValidMove
 		{
 			if (actual_move)
 			{
-				mycentreprint(ent.owner, "You must jump again");
+				checkers_invalid_notified = TRUE;
 			}
 			return (FALSE);
 		}
@@ -885,7 +964,7 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckersValidMove
 		{
 			if (actual_move)
 			{
-				mycentreprint(ent.owner, "You must capture");
+				checkers_invalid_notified = TRUE;
 			}
 			return (FALSE);
 		}
@@ -908,7 +987,852 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckersValidMove
 		}
 		return (SPAWNFLAG_LASER);
 	}
+	if (actual_move)
+	{
+		CheckersDebugInvalidMove(ent, loc, "movement-geometry");
+	}
 	return (FALSE);
+};
+
+float() CheckersBotDepth =
+{
+	local float depth;
+
+	depth = floor(cvar("botdepth"));
+	if ((depth < 1))
+	{
+		depth = 3;
+	}
+	if ((depth > 5))
+	{
+		depth = 5;
+	}
+	return (depth);
+};
+
+float() CheckersBotDelay =
+{
+	local float delay;
+
+	delay = cvar("botdelay");
+	if ((delay <= MSG_BROADCAST))
+	{
+		delay = 0.5;
+	}
+	if ((delay > 5))
+	{
+		delay = 5;
+	}
+	return (delay);
+};
+
+void() CheckersApplyBotCvars =
+{
+	local float bot_side;
+
+	if ((player1 != world))
+	{
+		player1.is_bot = FALSE;
+		if (single_player)
+		{
+			setmodel(player1, "progs/headcam.mdl");
+		}
+	}
+	if ((player2 != world))
+	{
+		player2.is_bot = FALSE;
+		if (single_player)
+		{
+			setmodel(player2, "progs/headcam.mdl");
+		}
+	}
+	if (!single_player)
+	{
+		return;
+	}
+	if (((player1 != world) && (player1.chess_team == "black")))
+	{
+		player1.netname = "Black";
+	}
+	if (((player2 != world) && (player2.chess_team == "white")))
+	{
+		player2.netname = "White";
+	}
+	if (!game_checkers)
+	{
+		return;
+	}
+	if (((player1 != world) && (player1.chess_team == "black")))
+	{
+		player1.netname = "Red (Red Armored Pieces)";
+	}
+	if (((player2 != world) && (player2.chess_team == "white")))
+	{
+		player2.netname = "Black (Blue Armored Pieces)";
+	}
+	bot_side = floor(cvar("bot"));
+	if (((bot_side == 1) && (player1 != world)))
+	{
+		player1.is_bot = TRUE;
+		player1.netname = "Red Bot (Red Armored Pieces)";
+		setmodel(player1, "progs/null.mdl");
+	}
+	if (((bot_side == 2) && (player2 != world)))
+	{
+		player2.is_bot = TRUE;
+		player2.netname = "Black Bot (Blue Armored Pieces)";
+		setmodel(player2, "progs/null.mdl");
+	}
+};
+
+float(entity ent, float loc) CheckersBotMoveIsJump =
+{
+	if (((fabs((GetX(loc) - GetX(ent.location))) == 2) && (fabs((GetY(loc) - GetY(ent.location))) == 2)))
+	{
+		return (TRUE);
+	}
+	return (FALSE);
+};
+
+entity(entity ent, float loc) CheckersBotCapturedEntity =
+{
+	local float midloc;
+
+	if (!CheckersBotMoveIsJump(ent, loc))
+	{
+		return (world);
+	}
+	midloc = ((((GetX(ent.location) + GetX(loc)) / 2) * 10) + ((GetY(ent.location) + GetY(loc)) / 2));
+	return (EntityAtLoc(midloc));
+};
+
+float(entity ent, float loc) CheckersBotWouldPromote =
+{
+	if (ent.isking)
+	{
+		return (FALSE);
+	}
+	if ((((ent.chess_team == "white") && (GetY(loc) == 8)) || ((ent.chess_team == "black") && (GetY(loc) == 1))))
+	{
+		return (TRUE);
+	}
+	return (FALSE);
+};
+
+float(entity side, entity forced_piece, entity piece, float loc) CheckersBotMoveAllowed =
+{
+	local float must_capture;
+
+	if ((piece == world))
+	{
+		return (FALSE);
+	}
+	if ((((piece.owner != side) || !piece.ischecker) || (piece.health <= MSG_BROADCAST)))
+	{
+		return (FALSE);
+	}
+	if (((forced_piece != world) && (piece != forced_piece)))
+	{
+		return (FALSE);
+	}
+	if (CheckersCanJumpTo(piece, loc))
+	{
+		return (TRUE);
+	}
+	if ((forced_piece != world))
+	{
+		return (FALSE);
+	}
+	must_capture = CheckersAnyCaptureAvailable(side);
+	if (must_capture)
+	{
+		return (FALSE);
+	}
+	return (CheckersCanStepTo(piece, loc));
+};
+
+float(entity piece) CheckersBotPieceScore =
+{
+	local float score;
+	local float locx;
+	local float locy;
+
+	if (((piece == world) || !piece.ischecker))
+	{
+		return (MSG_BROADCAST);
+	}
+	if (piece.isking)
+	{
+		score = 175;
+	}
+	else
+	{
+		score = 100;
+		if ((piece.chess_team == "white"))
+		{
+			score = (score + ((GetY(piece.location) - 1) * 4));
+		}
+		else
+		{
+			score = (score + ((8 - GetY(piece.location)) * 4));
+		}
+	}
+	locx = GetX(piece.location);
+	locy = GetY(piece.location);
+	if (((locx >= 3) && (locx <= 6)) && ((locy >= 3) && (locy <= 6)))
+	{
+		score = (score + 6);
+	}
+	if (CheckersPieceCanJump(piece))
+	{
+		score = (score + 20);
+	}
+	return (score);
+};
+
+float() CheckersBotEvaluate =
+{
+	local entity trav;
+	local float score;
+
+	if (((checkers_bot_side == world) || (checkers_bot_side.opponent == world)))
+	{
+		return (MSG_BROADCAST);
+	}
+	if (!CheckersSideHasLegalMove(checkers_bot_side))
+	{
+		return (-90000);
+	}
+	if (!CheckersSideHasLegalMove(checkers_bot_side.opponent))
+	{
+		return (90000);
+	}
+	score = MSG_BROADCAST;
+	trav = find(world, chess_team, checkers_bot_side.chess_team);
+	while ((trav != world))
+	{
+		if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+		{
+			score = (score + CheckersBotPieceScore(trav));
+			if (CheckersPieceCanStep(trav))
+			{
+				score = (score + 2);
+			}
+		}
+		trav = find(trav, chess_team, checkers_bot_side.chess_team);
+	}
+	trav = find(world, chess_team, checkers_bot_side.opponent.chess_team);
+	while ((trav != world))
+	{
+		if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+		{
+			score = (score - CheckersBotPieceScore(trav));
+			if (CheckersPieceCanStep(trav))
+			{
+				score = (score - 2);
+			}
+		}
+		trav = find(trav, chess_team, checkers_bot_side.opponent.chess_team);
+	}
+	return (score);
+};
+
+float(entity side, entity forced_piece, float depth, float alpha, float beta) CheckersBotSearch;
+
+float(entity side, entity forced_piece, entity piece, float loc, float depth, float alpha, float beta) CheckersBotMoveSearchScore =
+{
+	local entity captured;
+	local float captured_health;
+	local float captured_ischecker;
+	local float captured_location;
+	local float old_location;
+	local float old_isking;
+	local float promoted;
+	local float score;
+	local float is_jump;
+
+	if (!CheckersBotMoveAllowed(side, forced_piece, piece, loc))
+	{
+		return (-1234567);
+	}
+	is_jump = CheckersBotMoveIsJump(piece, loc);
+	captured = CheckersBotCapturedEntity(piece, loc);
+	captured_health = MSG_BROADCAST;
+	captured_ischecker = FALSE;
+	captured_location = MSG_BROADCAST;
+	if ((captured != world))
+	{
+		captured_health = captured.health;
+		captured_ischecker = captured.ischecker;
+		captured_location = captured.location;
+	}
+	old_location = piece.location;
+	old_isking = piece.isking;
+	promoted = CheckersBotWouldPromote(piece, loc);
+	piece.location = loc;
+	if ((captured != world))
+	{
+		captured.health = -10;
+		captured.location = MSG_BROADCAST;
+		captured.ischecker = FALSE;
+	}
+	if (promoted)
+	{
+		piece.isking = TRUE;
+	}
+	if (((is_jump && !promoted) && CheckersPieceCanJump(piece)))
+	{
+		score = CheckersBotSearch(side, piece, depth, alpha, beta);
+	}
+	else
+	{
+		score = CheckersBotSearch(side.opponent, world, (depth - 1), alpha, beta);
+	}
+	piece.location = old_location;
+	piece.isking = old_isking;
+	if ((captured != world))
+	{
+		captured.health = captured_health;
+		captured.location = captured_location;
+		captured.ischecker = captured_ischecker;
+	}
+	return (score);
+};
+
+float(entity side, entity forced_piece, float depth, float alpha, float beta) CheckersBotSearch =
+{
+	local entity trav;
+	local float best;
+	local float score;
+	local float any_move;
+	local float maximize;
+
+	if ((depth <= MSG_BROADCAST))
+	{
+		return (CheckersBotEvaluate());
+	}
+	if ((side == world))
+	{
+		return (CheckersBotEvaluate());
+	}
+	maximize = (side == checkers_bot_side);
+	if (maximize)
+	{
+		best = -100000;
+	}
+	else
+	{
+		best = 100000;
+	}
+	any_move = FALSE;
+	if ((forced_piece != world))
+	{
+		trav = forced_piece;
+	}
+	else
+	{
+		trav = find(world, chess_team, side.chess_team);
+	}
+	while ((trav != world))
+	{
+		if (((trav == forced_piece) || (forced_piece == world)))
+		{
+			if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+			{
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 22), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 18), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 18), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 22), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 11), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 9), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 9), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 11), depth, alpha, beta);
+				if ((score != -1234567))
+				{
+					any_move = TRUE;
+					if (maximize)
+					{
+						if ((score > best))
+						{
+							best = score;
+						}
+						if ((best > alpha))
+						{
+							alpha = best;
+						}
+					}
+					else
+					{
+						if ((score < best))
+						{
+							best = score;
+						}
+						if ((best < beta))
+						{
+							beta = best;
+						}
+					}
+					if ((beta <= alpha))
+					{
+						return (best);
+					}
+				}
+			}
+		}
+		if ((forced_piece != world))
+		{
+			trav = world;
+		}
+		else
+		{
+			trav = find(trav, chess_team, side.chess_team);
+		}
+	}
+	if (!any_move)
+	{
+		if (maximize)
+		{
+			return (-90000);
+		}
+		return (90000);
+	}
+	return (best);
+};
+
+float(entity piece, float loc) CheckersBotRootBonus =
+{
+	local float score;
+	local float locx;
+	local float locy;
+
+	score = (random() * 0.01);
+	if (CheckersBotMoveIsJump(piece, loc))
+	{
+		score = (score + 2);
+	}
+	if (CheckersBotWouldPromote(piece, loc))
+	{
+		score = (score + 1);
+	}
+	locx = GetX(loc);
+	locy = GetY(loc);
+	if (((locx >= 3) && (locx <= 6)) && ((locy >= 3) && (locy <= 6)))
+	{
+		score = (score + 0.5);
+	}
+	return (score);
+};
+
+void(entity piece, float loc) CheckersBotConsiderRootMove =
+{
+	local float score;
+
+	score = CheckersBotMoveSearchScore(current_turn, current_selected, piece, loc, checkers_bot_search_depth, -100000, 100000);
+	if ((score == -1234567))
+	{
+		return;
+	}
+	score = (score + CheckersBotRootBonus(piece, loc));
+	if (((checkers_bot_best_piece == world) || (score > checkers_bot_best_score)) || ((score == checkers_bot_best_score) && (random() < 0.5)))
+	{
+		checkers_bot_best_piece = piece;
+		checkers_bot_best_dest = loc;
+		checkers_bot_best_score = score;
+	}
+};
+
+void() CheckersBotChooseMove =
+{
+	local entity trav;
+
+	checkers_bot_best_piece = world;
+	checkers_bot_best_dest = MSG_BROADCAST;
+	checkers_bot_best_score = -100000;
+	checkers_bot_side = current_turn;
+	checkers_bot_search_depth = CheckersBotDepth();
+	if (checkers_must_jump)
+	{
+		trav = current_selected;
+	}
+	else
+	{
+		trav = find(world, chess_team, current_turn.chess_team);
+	}
+	while ((trav != world))
+	{
+		if (((trav == current_selected) || !checkers_must_jump))
+		{
+			if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+			{
+				CheckersBotConsiderRootMove(trav, (trav.location + 22));
+				CheckersBotConsiderRootMove(trav, (trav.location - 18));
+				CheckersBotConsiderRootMove(trav, (trav.location + 18));
+				CheckersBotConsiderRootMove(trav, (trav.location - 22));
+				CheckersBotConsiderRootMove(trav, (trav.location + 11));
+				CheckersBotConsiderRootMove(trav, (trav.location - 9));
+				CheckersBotConsiderRootMove(trav, (trav.location + 9));
+				CheckersBotConsiderRootMove(trav, (trav.location - 11));
+			}
+		}
+		if (checkers_must_jump)
+		{
+			trav = world;
+		}
+		else
+		{
+			trav = find(trav, chess_team, current_turn.chess_team);
+		}
+	}
+};
+
+float(entity actor, entity piece, float loc) CheckersExecuteBotMove =
+{
+	local vector dest_org;
+	local entity eatloc;
+
+	if (((piece == world) || (actor == world)))
+	{
+		return (FALSE);
+	}
+	current_selected = piece;
+	current_dest_int = loc;
+	current_destination = ftos(loc);
+	if (!CanMove(current_selected, current_dest_int, TRUE))
+	{
+		return (FALSE);
+	}
+	action_flag = TRUE;
+	ClearSelectionEffect();
+	ClearLastHighlight();
+	dest_org = LocationToVector(current_dest_int);
+	setorigin(dest_ent, dest_org);
+	mystuffcmd(actor, "play effects/button.wav\n");
+	WalkToDest(actor);
+	bprint("** Checkers: ");
+	if ((current_selected.chess_team == "white"))
+	{
+		bprint("Black (Blue Armored Pieces) ");
+	}
+	else
+	{
+		bprint("Red (Red Armored Pieces) ");
+	}
+	if (current_selected.isking)
+	{
+		bprint("king ");
+	}
+	else
+	{
+		bprint("man ");
+	}
+	bprint(ftos(current_selected.location));
+	eatloc = current_selected.enemy;
+	if ((eatloc == world))
+	{
+		bprint(" - ");
+	}
+	else
+	{
+		bprint(" x ");
+	}
+	bprint(ftos(current_dest_int));
+	bprint("\n");
+	LastMoved = current_selected;
+	LastMovedLocation = current_dest_int;
+	current_selected.location = current_dest_int;
+	current_selected.hasmoved = TRUE;
+	current_turn.chess_flags = (current_turn.chess_flags - (current_turn.chess_flags & CF_SELECTED_PIECE));
+	return (TRUE);
+};
+
+void() CheckersBotThink =
+{
+	if ((self == checkers_bot_thinker))
+	{
+		checkers_bot_thinker = world;
+	}
+	if (((!game_checkers || gameover) || (current_turn == world)))
+	{
+		remove(self);
+		return;
+	}
+	if (!current_turn.is_bot)
+	{
+		remove(self);
+		return;
+	}
+	if (action_flag)
+	{
+		self.nextthink = (time + 0.2);
+		checkers_bot_thinker = self;
+		return;
+	}
+	if (((current_turn.owner != world) && current_turn.owner.menu_screen))
+	{
+		self.nextthink = (time + 0.5);
+		checkers_bot_thinker = self;
+		return;
+	}
+	CheckersBotChooseMove();
+	if ((checkers_bot_best_piece == world))
+	{
+		remove(self);
+		if (!CheckersSideHasLegalMove(current_turn))
+		{
+			CheckCheckersGameOver();
+		}
+		else
+		{
+			bprint("** Checkers bot found no move despite legal moves\n");
+			current_turn.is_bot = FALSE;
+		}
+		return;
+	}
+	if (!CheckersExecuteBotMove(current_turn, checkers_bot_best_piece, checkers_bot_best_dest))
+	{
+		bprint("** Checkers bot could not execute selected move\n");
+		current_turn.is_bot = FALSE;
+		action_flag = FALSE;
+		remove(self);
+		return;
+	}
+	remove(self);
+};
+
+void() CheckersMaybeScheduleBotTurn =
+{
+	if ((checkers_bot_thinker != world))
+	{
+		remove(checkers_bot_thinker);
+		checkers_bot_thinker = world;
+	}
+	if (((!game_checkers || gameover) || (current_turn == world)))
+	{
+		return;
+	}
+	if (!current_turn.is_bot)
+	{
+		return;
+	}
+	if (action_flag)
+	{
+		return;
+	}
+	checkers_bot_thinker = spawn();
+	setmodel(checkers_bot_thinker, "progs/null.mdl");
+	checkers_bot_thinker.think = CheckersBotThink;
+	checkers_bot_thinker.nextthink = (time + CheckersBotDelay());
+	mysprint(current_turn, "Computer thinking\n");
 };
 
 float(entity ent, float loc, entity at_loc, float actual_move) CheckValidMove =
@@ -1431,12 +2355,12 @@ float(entity ent, float loc, float actual_move) CanMove =
 				}
 				if ((ent.owner.chess_flags & CF_SELECTED_PIECE))
 				{
-					mycentreprint(ent.owner, "Selection cleared\n");
+					mysprint(ent.owner, "Selection cleared\n");
 					mystuffcmd(self, "play effects/button.wav\n");
 					castle_to_move = world;
 					king_castle_move_flag = FALSE;
 					ent.owner.chess_flags = (ent.owner.chess_flags - (ent.owner.chess_flags & CF_SELECTED_PIECE));
-					light_ent.effects = MSG_BROADCAST;
+					ClearSelectionEffect();
 				}
 			}
 			else
@@ -1451,7 +2375,10 @@ float(entity ent, float loc, float actual_move) CanMove =
 	{
 		if (actual_move)
 		{
-			mycentreprint(ent.owner, "Invalid move for that piece");
+			if ((!game_checkers || !checkers_invalid_notified))
+			{
+				mysprint(ent.owner, "Invalid move for that piece\n");
+			}
 		}
 		return (FALSE);
 	}
@@ -1550,48 +2477,48 @@ void() ProcessSelection =
 			{
 				if (current_selected.isking)
 				{
-					mycentreprint(self, "King selected");
+					mysprint(self, "King selected\n");
 				}
 				else
 				{
-					mycentreprint(self, "Man selected");
+					mysprint(self, "Man selected\n");
 				}
 			}
 			else
 			{
 			if ((current_selected.classname == "chess_pawn"))
 			{
-				mycentreprint(self, "Pawn selected");
+				mysprint(self, "Pawn selected\n");
 			}
 			else
 			{
 				if ((current_selected.classname == "chess_rook"))
 				{
-					mycentreprint(self, "Rook selected");
+					mysprint(self, "Rook selected\n");
 				}
 				else
 				{
 					if ((current_selected.classname == "chess_knight"))
 					{
-						mycentreprint(self, "Knight selected");
+						mysprint(self, "Knight selected\n");
 					}
 					else
 					{
 						if ((current_selected.classname == "chess_bishop"))
 						{
-							mycentreprint(self, "Bishop selected");
+							mysprint(self, "Bishop selected\n");
 						}
 						else
 						{
 							if ((current_selected.classname == "chess_queen"))
 							{
-								mycentreprint(self, "Queen selected");
+								mysprint(self, "Queen selected\n");
 							}
 							else
 							{
 								if ((current_selected.classname == "chess_king"))
 								{
-									mycentreprint(self, "King selected");
+									mysprint(self, "King selected\n");
 								}
 							}
 						}
@@ -1600,11 +2527,7 @@ void() ProcessSelection =
 			}
 			}
 			mystuffcmd(self, "play effects/button.wav\n");
-			if ((light_ent.origin != (current_selected.origin + '0 0 96')))
-			{
-				setorigin(light_ent, (current_selected.origin + '0 0 96'));
-			}
-			light_ent.effects = EF_DIMLIGHT;
+			ShowSelectionEffect(current_selected);
 			if (!game_checkers)
 			{
 				if ((current_selected.classname == "chess_pawn"))
@@ -1678,7 +2601,7 @@ void() ProcessSelection =
 					if (CanMove(current_selected, current_dest_int, TRUE))
 					{
 						action_flag = TRUE;
-						light_ent.effects = MSG_BROADCAST;
+						ClearSelectionEffect();
 						ClearLastHighlight();
 						dest_org = LocationToVector(current_dest_int);
 						setorigin(dest_ent, dest_org);
@@ -1837,11 +2760,11 @@ void() ProcessSelection =
 						bprint("** Checkers: ");
 						if ((current_selected.chess_team == "white"))
 						{
-							bprint("White ");
+							bprint("Black (Blue Armored Pieces) ");
 						}
 						else
 						{
-							bprint("Black ");
+							bprint("Red (Red Armored Pieces) ");
 						}
 						if (current_selected.isking)
 						{
@@ -2101,33 +3024,33 @@ void() welcome_mesg =
 
 	oldent = self;
 	self = oldent.owner;
-	AddMarker();
+	self.lastmarked = SPAWN_CRUCIFIED;
+	self.marker1 = self.origin;
+	self.marker1a = self.v_angle;
 	self = oldent;
-	if (!self.owner.spectator)
+	if ((!self.owner.spectator && !menu_startup_pending))
 	{
-		sprint(self.owner, "** You are playing");
+		sprint(self.owner, "** You are playing ");
 		sprint(self.owner, self.owner.chess_team);
 		sprint(self.owner, "\n");
 	}
-	sprint(self.owner, "crownquake\n  -------------------------\n     C R O W N Q U A K E\n  -------------------------\n");
-	sprint(self.owner, "Original QUESS by the IMPACT TEAM; v1.34a mods by Ralgha\n");
-	if (game_checkers)
+	sprint(self.owner, "  -------------------------\n");
+	sprint(self.owner, "\s     C R O W N Q U A K E\n");
+	sprint(self.owner, "  -------------------------\n");
+	sprint(self.owner, "Build: 2026-07-05-menu19\n");
+	if ((!menu_startup_pending && game_checkers))
 	{
 		sprint(self.owner, "Mode: Checkers\n");
 	}
-	else
+	else if (!menu_startup_pending)
 	{
 		sprint(self.owner, "Mode: Chess\n");
 	}
-	sprint(self.owner, "See readme.txt for more detailed information\n");
-	sprint(self.owner, "Right Mouse to back up\n");
-	sprint(self.owner, "Shift to go forward\n");
-	sprint(self.owner, "Left Mouse to select/deselect piece\n");
-	sprint(self.owner, "H for a list of keys\n");
 	stuffcmd(self.owner, "crosshair 1\n");
 	stuffcmd(self.owner, "bind F1 \"impulse 241\"\n");
 	stuffcmd(self.owner, "bind F2 \"impulse 242\"\n");
 	stuffcmd(self.owner, "bind h \"impulse 200\"\n");
+	stuffcmd(self.owner, "bind shift +speed\n");
 	if (!self.owner.spectator)
 	{
 		Menu_OpenStartupModeSelect();
@@ -2214,14 +3137,10 @@ void() CheckersFinishMove =
 		checkers_was_jump = FALSE;
 		current_selected = self;
 		current_turn.chess_flags = (current_turn.chess_flags | CF_SELECTED_PIECE);
-		if ((light_ent != world))
-		{
-			setorigin(light_ent, (self.origin + '0 0 96'));
-			light_ent.effects = EF_DIMLIGHT;
-		}
+		ShowSelectionEffect(self);
 		action_flag = FALSE;
-		mycentreprint(current_turn, "Jump again");
 		mystuffcmd(current_turn, "bf\n");
+		CheckersMaybeScheduleBotTurn();
 		return;
 	}
 	CheckersClearTurnState();
@@ -2281,13 +3200,13 @@ void() next_turn =
 			return;
 		}
 	}
-	if (single_player)
+	if ((single_player && !current_turn.is_bot))
 	{
 		current_turn.v_angle = current_turn.owner.v_angle;
 		current_turn.v_angle_y = anglemod(current_turn.v_angle_y);
 		current_turn.origin = current_turn.owner.origin;
 	}
-	light_ent.effects = MSG_BROADCAST;
+	ClearSelectionEffect();
 	ClearLastHighlight();
 	current_turn.chess_flags = (current_turn.chess_flags - (current_turn.chess_flags & CF_SELECTED_PIECE));
 	current_turn.chess_flags = (current_turn.chess_flags - (current_turn.chess_flags & CF_TIME_NOTIFY));
@@ -2306,18 +3225,27 @@ void() next_turn =
 	}
 	if (!single_player)
 	{
-		setmodel(current_turn.pointer, "progs/s_bubble.spr");
+		setmodel(current_turn.pointer, "progs/s_light.spr");
+		current_turn.pointer.scale = 0.5;
 		mycentreprint(current_turn, "Your turn\n");
 	}
 	else
 	{
-		if ((current_turn.chess_team == "white"))
+		if ((game_checkers && (current_turn.chess_team == "white")))
 		{
-			mycentreprint(current_turn, "Current turn: White\n");
+			mysprint(current_turn, "Current turn: Black\n(Blue Armored Pieces)\n");
+		}
+		else if ((game_checkers && (current_turn.chess_team == "black")))
+		{
+			mysprint(current_turn, "Current turn: Red\n(Red Armored Pieces)\n");
+		}
+		else if ((current_turn.chess_team == "white"))
+		{
+			mysprint(current_turn, "Current turn: White\n");
 		}
 		else
 		{
-			mycentreprint(current_turn, "Current turn: Black\n");
+			mysprint(current_turn, "Current turn: Black\n");
 		}
 	}
 	mystuffcmd(current_turn, "bf\n");
@@ -2332,7 +3260,7 @@ void() next_turn =
 	current_turn.turn_starttime = time;
 	current_selected = world;
 	current_turn.chess_flags = (current_turn.chess_flags | CF_CHECK_NOTIFY);
-	if (single_player)
+	if ((single_player && !current_turn.is_bot))
 	{
 		setorigin(current_turn.owner, current_turn.origin);
 		msg_entity = current_turn.owner;
@@ -2343,6 +3271,7 @@ void() next_turn =
 		current_turn.fixangle = TRUE;
 	}
 	action_flag = FALSE;
+	CheckersMaybeScheduleBotTurn();
 };
 
 entity(entity monst) FindNewEnemy =
@@ -2408,7 +3337,6 @@ void() CheckGameOver =
 	local entity ent2;
 	local entity e1trav;
 	local entity e2trav;
-	local entity winner;
 	local float found;
 
 	if (!king_dead)
@@ -2417,13 +3345,6 @@ void() CheckGameOver =
 		king_dead = TRUE;
 		sound(self, CHAN_AUTO, "boss1/death.wav", SPAWN_CRUCIFIED, ATTN_NONE);
 		action_flag = TRUE;
-		gameover = TRUE;
-		winner = world;
-		if ((self.owner != world))
-		{
-			winner = self.owner.opponent;
-		}
-		Menu_OpenGameOver(winner);
 		found = FALSE;
 		e1trav = find(world, chess_team, "white");
 		while (((e1trav != world) && !found))
@@ -2525,7 +3446,7 @@ void() CheckGameOver =
 			if ((self.owner.flags & FL_CLIENT))
 			{
 				mycentreprint(self.owner, "You have lost..");
-				self.owner.skin = MSG_BROADCAST;
+				self.owner.opponent.skin = MSG_BROADCAST;
 			}
 		}
 	}
@@ -2581,33 +3502,24 @@ float(entity ent, entity ignore) CanDie =
 	return (FALSE);
 };
 
-void(entity ent, string msg) MenuSafeCenterPrint =
-{
-	if ((ent == world))
-	{
-		return;
-	}
-	if (ent.menu_screen)
-	{
-		return;
-	}
-	centerprint(ent, msg);
-};
-
 void(entity ent, string msg) mycentreprint =
 {
-	if ((ent == world))
-	{
-		return;
-	}
 	ent.last_message = msg;
 	if ((ent.classname == "info_player_start"))
 	{
-		MenuSafeCenterPrint(ent.owner, msg);
+		if (((ent.owner != world) && ent.owner.menu_screen))
+		{
+			return;
+		}
+		centerprint(ent.owner, msg);
 	}
 	else
 	{
-		MenuSafeCenterPrint(ent, msg);
+		if (ent.menu_screen)
+		{
+			return;
+		}
+		centerprint(ent, msg);
 	}
 };
 

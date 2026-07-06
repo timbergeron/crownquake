@@ -211,7 +211,7 @@ void() SightSound =
 									{
 										if ((self.classname == "monster_vomit"))
 										{
-											sound(self, CHAN_VOICE, "vomitus/v_sight1.wav", LASERTARG_ON, ATTN_NORM);
+											sound(self, CHAN_VOICE, "blob/sight1.wav", LASERTARG_ON, ATTN_NORM);
 										}
 										else
 										{

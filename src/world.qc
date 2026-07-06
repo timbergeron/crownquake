@@ -119,6 +119,11 @@ entity lastspawn;
 
 void() worldspawn =
 {
+	registercvar("checkers", "0");
+	registercvar("bot", "0");
+	registercvar("botdepth", "3");
+	registercvar("botdelay", "0.5");
+	registercvar("cq_menustart", "0");
 	lastspawn = world;
 	InitBodyQue();
 	if ((self.model == "maps/e1m8.bsp"))
@@ -157,7 +162,6 @@ void() worldspawn =
 	precache_sound("effects/button.wav");
 	precache_sound("boss1/death.wav");
 	precache_sound("blob/sight1.wav");
-	precache_sound("vomitus/v_sight1.wav");
 	precache_sound("items/itembk2.wav");
 	precache_sound("items/armor1.wav");
 	precache_sound("weapons/pkup.wav");
@@ -185,6 +189,7 @@ void() worldspawn =
 	precache_model("progs/gib3.mdl");
 	precache_model("progs/missile.mdl");
 	precache_model("progs/s_bubble.spr");
+	precache_model("progs/s_light.spr");
 	precache_model("progs/s_explod.spr");
 	precache_model("progs/v_shot.mdl");
 	precache_model("progs/bolt.mdl");
@@ -197,8 +202,6 @@ void() worldspawn =
 	precache_model("progs/v_light.mdl");
 	precache_model("progs/null.mdl");
 	precache_model("progs/headcam.mdl");
-	precache_model("progs/cross1.mdl");
-	precache_model("progs/cross2.mdl");
 	lightstyle(MSG_BROADCAST, "m");
 	lightstyle(1, "mmnmmommommnonmmonqnmmo");
 	lightstyle(WEAPON_ROCKET, "abcdefghijklmnopqrstuvwxyzyxwvutsrqponmlkjihgfedcba");
