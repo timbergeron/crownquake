@@ -37,3 +37,4 @@ chessrules.qc
 chessbot.qc
 chessperft.qc
 menu.qc
+undo.qc

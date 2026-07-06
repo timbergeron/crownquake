@@ -709,6 +709,7 @@ void(float use_checkers) ResetGameToMode =
 	LastMoved = world;
 	LastMovedLocation = MSG_BROADCAST;
 	movenum = MSG_BROADCAST;
+	UndoResetStack();
 	if ((GetBody != world))
 	{
 		remove(GetBody);
@@ -758,7 +759,7 @@ void(float use_checkers) ResetGameToMode =
 	if ((current_turn != world))
 	{
 		current_turn.turn_starttime = time;
-		if ((single_player && !current_turn.is_bot))
+		if (((single_player && !current_turn.is_bot) && !current_turn.opponent.is_bot))
 		{
 			setorigin(current_turn.owner, current_turn.origin);
 			current_turn.owner.angles = current_turn.angles;
@@ -766,6 +767,7 @@ void(float use_checkers) ResetGameToMode =
 		}
 		mycentreprint(current_turn, "New game\n");
 		mystuffcmd(current_turn, "bf\n");
+		UndoPushSnapshot();
 	}
 	CheckersMaybeScheduleBotTurn();
 	ChessMaybeScheduleBotTurn();
@@ -2779,6 +2781,37 @@ void() ProcessSelection =
 	{
 		if (!(current_turn.chess_flags & CF_SELECTED_PIECE))
 		{
+			if (game_checkers)
+			{
+				if (CheckersAnyCaptureAvailable(current_turn))
+				{
+					if (!CheckersPieceCanJump(current_selected))
+					{
+						mysprint(self, "Cannot select that piece: another piece has a mandatory capture.\n");
+						ClearLastHighlight();
+						current_selected = world;
+						return;
+					}
+				}
+				else if (!CheckersPieceCanStep(current_selected))
+				{
+					mysprint(self, "Cannot select that piece: it is blocked and has no legal moves.\n");
+					ClearLastHighlight();
+					current_selected = world;
+					return;
+				}
+			}
+			else
+			{
+				ChessRebuildOccupancy();
+				if (!ChessPieceHasLegalMove(current_selected))
+				{
+					mysprint(self, "Cannot select that piece: it has no legal moves in this position.\n");
+					ClearLastHighlight();
+					current_selected = world;
+					return;
+				}
+			}
 			current_turn.chess_flags = (current_turn.chess_flags | CF_SELECTED_PIECE);
 			if ((game_checkers && current_selected.ischecker))
 			{
@@ -3361,6 +3394,14 @@ void() welcome_mesg =
 	stuffcmd(self.owner, "bind F1 \"impulse 241\"\n");
 	stuffcmd(self.owner, "bind F2 \"impulse 242\"\n");
 	stuffcmd(self.owner, "bind h \"impulse 200\"\n");
+	// Vanilla Quake pauses local games while the console is open, so local play
+	// must resume for a frame before the impulse can reach QuakeC.  A network
+	// game keeps running and should leave each player's console open.
+	if (single_player)
+		stuffcmd(self.owner, "alias undo \"toggleconsole; wait; impulse 61\"\n");
+	else
+		stuffcmd(self.owner, "alias undo impulse 61\n");
+	stuffcmd(self.owner, "bind u \"impulse 61\"\n");
 	stuffcmd(self.owner, "bind shift +speed\n");
 	if (!self.owner.spectator)
 	{
@@ -3517,7 +3558,7 @@ void() next_turn =
 			bprint(" is in check\n");
 		}
 	}
-	if ((single_player && !current_turn.is_bot))
+	if (((single_player && !current_turn.is_bot) && !current_turn.opponent.is_bot))
 	{
 		current_turn.v_angle = current_turn.owner.v_angle;
 		current_turn.v_angle_y = anglemod(current_turn.v_angle_y);
@@ -3577,7 +3618,7 @@ void() next_turn =
 	current_turn.turn_starttime = time;
 	current_selected = world;
 	current_turn.chess_flags = (current_turn.chess_flags | CF_CHECK_NOTIFY);
-	if ((single_player && !current_turn.is_bot))
+	if (((single_player && !current_turn.is_bot) && !current_turn.opponent.is_bot))
 	{
 		setorigin(current_turn.owner, current_turn.origin);
 		msg_entity = current_turn.owner;
@@ -3588,6 +3629,7 @@ void() next_turn =
 		current_turn.fixangle = TRUE;
 	}
 	action_flag = FALSE;
+	UndoPushSnapshot();
 	CheckersMaybeScheduleBotTurn();
 	ChessMaybeScheduleBotTurn();
 };

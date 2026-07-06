@@ -933,13 +933,39 @@ void(entity piece, float to_loc) ChessExplainInvalidMove =
 	mysprint(piece.owner, "Invalid move: the selected entity is not a chess piece.\n");
 };
 
-float(entity side) ChessHasLegalMove =
+float(entity piece) ChessPieceHasLegalMove =
 {
-	local entity piece;
 	local float candidate;
 	local float candidate_count;
 	local float to_loc;
 	local float promotion;
+
+	if (!ChessPieceLive(piece))
+		return (FALSE);
+	candidate_count = ChessCandidateCount(piece);
+	candidate = 1;
+	while ((candidate <= candidate_count))
+	{
+		to_loc = ChessCandidateLocation(piece, candidate);
+		promotion = CHESS_PROMOTE_QUEEN;
+		while ((promotion <= CHESS_PROMOTE_KNIGHT))
+		{
+			if (ChessMoveIsLegal(piece, to_loc, promotion))
+				return (TRUE);
+			if (!ChessWouldPromote(piece, to_loc))
+				promotion = CHESS_PROMOTE_KNIGHT;
+			promotion = (promotion + 1);
+		}
+		if (ChessCandidateEndsRay(piece, candidate, to_loc))
+			candidate = (ceil((candidate / 7)) * 7);
+		candidate = (candidate + 1);
+	}
+	return (FALSE);
+};
+
+float(entity side) ChessHasLegalMove =
+{
+	local entity piece;
 
 	if ((side == world))
 		return (FALSE);
@@ -948,24 +974,8 @@ float(entity side) ChessHasLegalMove =
 	{
 		if ((ChessPieceLive(piece) && (piece.owner == side)))
 		{
-			candidate_count = ChessCandidateCount(piece);
-			candidate = 1;
-			while ((candidate <= candidate_count))
-			{
-				to_loc = ChessCandidateLocation(piece, candidate);
-				promotion = CHESS_PROMOTE_QUEEN;
-				while ((promotion <= CHESS_PROMOTE_KNIGHT))
-				{
-					if (ChessMoveIsLegal(piece, to_loc, promotion))
-						return (TRUE);
-					if (!ChessWouldPromote(piece, to_loc))
-						promotion = CHESS_PROMOTE_KNIGHT;
-					promotion = (promotion + 1);
-				}
-				if (ChessCandidateEndsRay(piece, candidate, to_loc))
-					candidate = (ceil((candidate / 7)) * 7);
-				candidate = (candidate + 1);
-			}
+			if (ChessPieceHasLegalMove(piece))
+				return (TRUE);
 		}
 		piece = find(piece, chess_team, side.chess_team);
 	}

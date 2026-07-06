@@ -1120,6 +1120,13 @@ void() ImpulseCommands =
 		self.impulse = MSG_BROADCAST;
 		return;
 	}
+	if ((self.impulse == 61))
+	{
+		if ((self.spectator != TRUE))
+			UndoMove();
+		self.impulse = MSG_BROADCAST;
+		return;
+	}
 	if (self.menu_screen)
 	{
 		Menu_Select(self.impulse);

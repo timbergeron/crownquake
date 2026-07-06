@@ -554,6 +554,19 @@ void() Menu_SelectPause =
 		Menu_ToggleMoveHints();
 		return;
 	}
+	if ((self.impulse == 6))
+	{
+		if ((UndoModeAllowed() && UndoAvailable()))
+		{
+			UndoMove();
+			Menu_Close();
+		}
+		else
+		{
+			self.menu_refresh = MSG_BROADCAST;
+		}
+		return;
+	}
 	if (((self.impulse == 20) || (self.impulse == 100)) || (self.impulse == 242))
 	{
 		Menu_Close();
@@ -833,6 +846,8 @@ void() Menu_RenderPause =
 			text = strcat(text, Menu_Row(5, "Move Hints: On   "));
 		else
 			text = strcat(text, Menu_Row(5, "Move Hints: Off  "));
+		if ((UndoModeAllowed() && UndoAvailable()))
+			text = strcat(text, Menu_Row(6, "Undo Move        "));
 		centerprint(self, text);
 		return;
 	}
@@ -842,6 +857,8 @@ void() Menu_RenderPause =
 		text = strcat(text, Menu_Row(5, "Move Hints: On   "));
 	else
 		text = strcat(text, Menu_Row(5, "Move Hints: Off  "));
+	if ((UndoModeAllowed() && UndoAvailable()))
+		text = strcat(text, Menu_Row(6, "Undo Move        "));
 	centerprint(self, text);
 };
 
@@ -854,6 +871,7 @@ void() Menu_RenderHelp =
 			"\xC3\xC8\xC5\xC3\xCB\xC5\xD2\xD3 \xC8\xC5\xCC\xD0\n\n"
 			"  Space/LMB  select or move \n"
 			"  Del        unselect piece \n"
+			"  U          undo move      \n"
 			"  F1         text board     \n"
 			"  F2         game menu      \n"
 			"  H          this help      \n\n"
@@ -870,6 +888,7 @@ void() Menu_RenderHelp =
 		"  Space/LMB  select or move \n"
 		"  Del        unselect piece \n"
 		"  P          pass turn      \n"
+		"  U          undo move      \n"
 		"  F1         text board     \n"
 		"  F2         game menu      \n"
 		"  H          this help      \n\n"
