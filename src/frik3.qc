@@ -3206,7 +3206,7 @@ void() welcome_mesg =
 	sprint(self.owner, "  -------------------------\n");
 	sprint(self.owner, "\s     C R O W N Q U A K E\n");
 	sprint(self.owner, "  -------------------------\n");
-	sprint(self.owner, "Build: 2026-07-06-chessai5\n");
+	sprint(self.owner, "Build: 2026-07-06-menu20\n");
 	if ((!menu_startup_pending && game_checkers))
 	{
 		sprint(self.owner, "Mode: Checkers\n");

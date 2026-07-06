@@ -234,6 +234,7 @@ float MENU_SCREEN_NEWGAME = 4;
 float MENU_SCREEN_GAMETYPE = 5;
 float MENU_SCREEN_SIDE = 6;
 float MENU_SCREEN_BOTLEVEL = 7;
+float MENU_SCREEN_MAP = 8;
 float menu_startup_shown;
 float menu_startup_pending;
 float menu_selected_checkers;

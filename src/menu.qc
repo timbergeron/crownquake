@@ -637,6 +637,11 @@ void() Menu_SelectNewGame =
 	}
 	if ((self.impulse == 3))
 	{
+		Menu_Open(MENU_SCREEN_MAP);
+		return;
+	}
+	if ((self.impulse == 4))
+	{
 		if (menu_startup_pending)
 		{
 			self.menu_refresh = MSG_BROADCAST;
@@ -654,6 +659,34 @@ void() Menu_SelectNewGame =
 		return;
 	}
 	self.menu_refresh = MSG_BROADCAST;
+};
+
+void() Menu_SelectMap =
+{
+	if (((self.impulse < 1) || (self.impulse > 4)))
+	{
+		self.menu_refresh = MSG_BROADCAST;
+		return;
+	}
+	if ((self.impulse == 4))
+	{
+		Menu_Open(MENU_SCREEN_NEWGAME);
+		return;
+	}
+	ChessPerftCancel();
+	CheckersCancelBotSearch();
+	ChessCancelBotSearch();
+	cvar_set("bot", "0");
+	cvar_set("cq_menustart", "0");
+	localcmd("set bot 0\n");
+	localcmd("set cq_menustart 0\n");
+	centerprint(self, "Loading board map...\n");
+	if ((self.impulse == 1))
+		localcmd("map quess1\n");
+	else if ((self.impulse == 2))
+		localcmd("map quess2\n");
+	else
+		localcmd("map quess3\n");
 };
 
 void() Menu_SelectGameType =
@@ -776,6 +809,11 @@ void(float imp) Menu_Select =
 		Menu_SelectBotLevel();
 		return;
 	}
+	if ((self.menu_screen == MENU_SCREEN_MAP))
+	{
+		Menu_SelectMap();
+		return;
+	}
 };
 
 void() Menu_RenderPause =
@@ -853,21 +891,29 @@ void() Menu_RenderGameOver =
 
 void() Menu_RenderNewGame =
 {
+	local string text;
+
 	if (menu_startup_pending)
 	{
-		centerprint(self,
-			"\n"
-			"\xD3\xC5\xCC\xC5\xC3\xD4 \xCD\xCF\xC4\xC5\n\n"
-			"  ", Menu_GoldNumber(1), "  Checkers            \n"
-			"  ", Menu_GoldNumber(2), "  Chess               \n");
+		text = strcat("\n", "\xD3\xC5\xCC\xC5\xC3\xD4 \xCD\xCF\xC4\xC5", "\n\n");
+		text = strcat(text, Menu_Row(1, "Checkers            "), Menu_Row(2, "Chess               "), Menu_Row(3, "Select Map          "));
+		centerprint(self, text);
 		return;
 	}
-	centerprint(self,
-		"\n"
-		"\xCE\xC5\xD7 \xC7\xC1\xCD\xC5\n\n"
-		"  ", Menu_GoldNumber(1), "  Checkers            \n"
-		"  ", Menu_GoldNumber(2), "  Chess               \n"
-		"  ", Menu_GoldNumber(3), "  Back                \n");
+	text = strcat("\n", "\xCE\xC5\xD7 \xC7\xC1\xCD\xC5", "\n\n");
+	text = strcat(text, Menu_Row(1, "Checkers            "), Menu_Row(2, "Chess               "), Menu_Row(3, "Select Map          "));
+	text = strcat(text, Menu_Row(4, "Back                "));
+	centerprint(self, text);
+};
+
+void() Menu_RenderMap =
+{
+	local string text;
+
+	text = strcat("\n", "\xD3\xC5\xCC\xC5\xC3\xD4 \xCD\xC1\xD0", "\n\n");
+	text = strcat(text, Menu_Row(1, "The Dark Church     "), Menu_Row(2, "Blood Sky Castle    "), Menu_Row(3, "The Hall of Kings   "));
+	text = strcat(text, Menu_Row(4, "Back                "));
+	centerprint(self, text);
 };
 
 void() Menu_RenderGameType =
@@ -967,6 +1013,11 @@ float() Menu_Render =
 	if ((self.menu_screen == MENU_SCREEN_BOTLEVEL))
 	{
 		Menu_RenderBotLevel();
+		return (TRUE);
+	}
+	if ((self.menu_screen == MENU_SCREEN_MAP))
+	{
+		Menu_RenderMap();
 		return (TRUE);
 	}
 	return (TRUE);
