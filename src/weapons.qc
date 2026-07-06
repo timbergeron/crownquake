@@ -1181,7 +1181,7 @@ void() ImpulseCommands =
 	{
 		if ((((!gameover && (current_turn != world)) && current_turn.is_bot) && (((self.impulse == 20) || (self.impulse == 60)) || (self.impulse == 100))))
 		{
-			centerprint(self, "Computer is thinking\n");
+			sprint(self, "Computer is thinking\n");
 			self.impulse = MSG_BROADCAST;
 			return;
 		}

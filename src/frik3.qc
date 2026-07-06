@@ -137,6 +137,22 @@ void() FindLocation =
 	local vector v1;
 	local float loc;
 
+	if (!cvar("movehints"))
+	{
+		if ((move_hint_piece != world))
+			ClearMoveHints();
+	}
+	else
+	{
+		if ((move_hint_piece == world))
+		{
+			if (((current_turn != world) && (current_selected != world)))
+			{
+				if (((current_turn.is_bot == FALSE) && (current_turn.chess_flags & CF_SELECTED_PIECE)))
+					ShowMoveHints(current_selected);
+			}
+		}
+	}
 	makevectors(self.v_angle);
 	traceline(self.origin, (self.origin + (v_forward * 4000)), TRUE, self);
 	current_destination = string_null;
@@ -288,8 +304,112 @@ float(float loc) CheckersOnBoard =
 	return (((x >= 1) && (x <= 8)) && ((y >= 1) && (y <= 8)));
 };
 
+void() ClearMoveHints =
+{
+	local entity hint;
+	local entity next_hint;
+
+	hint = move_hint_list;
+	while ((hint != world))
+	{
+		next_hint = hint.move_hint_next;
+		remove(hint);
+		hint = next_hint;
+	}
+	move_hint_list = world;
+	move_hint_piece = world;
+};
+
+void(float loc, float is_capture) AddMoveHint =
+{
+	local entity hint;
+	local vector hint_origin;
+
+	hint = spawn();
+	hint.classname = "move_hint";
+	hint.movetype = MOVETYPE_NONE;
+	hint.solid = SOLID_NOT;
+	setmodel(hint, "progs/s_light.spr");
+	hint.angles = '90 0 0';
+	hint.scale = 0.2;
+	if (is_capture)
+		hint.colormod = '1 1 0.1';
+	else
+		hint.colormod = '0.1 1 0.1';
+	hint_origin = (LocationToVector(loc) + '0 0 -22');
+	setorigin(hint, hint_origin);
+	hint.move_hint_next = move_hint_list;
+	move_hint_list = hint;
+};
+
+float(entity piece, float candidate) CheckersHintLocation =
+{
+	local float x;
+	local float y;
+
+	x = GetX(piece.location);
+	y = GetY(piece.location);
+	if ((candidate == 1)) return (((x + 1) * 10) + y + 1);
+	if ((candidate == 2)) return (((x + 1) * 10) + y - 1);
+	if ((candidate == 3)) return (((x - 1) * 10) + y + 1);
+	if ((candidate == 4)) return (((x - 1) * 10) + y - 1);
+	if ((candidate == 5)) return (((x + 2) * 10) + y + 2);
+	if ((candidate == 6)) return (((x + 2) * 10) + y - 2);
+	if ((candidate == 7)) return (((x - 2) * 10) + y + 2);
+	return (((x - 2) * 10) + y - 2);
+};
+
+void(entity piece) ShowMoveHints =
+{
+	local entity forced_piece;
+	local float candidate;
+	local float candidate_count;
+	local float loc;
+
+	ClearMoveHints();
+	if (!cvar("movehints"))
+		return;
+	if ((piece == world))
+		return;
+	if ((current_turn == world))
+		return;
+	if (current_turn.is_bot)
+		return;
+	if (((piece.owner != current_turn) || action_flag) || gameover)
+		return;
+	move_hint_piece = piece;
+	if (game_checkers)
+	{
+		forced_piece = world;
+		if (checkers_must_jump)
+			forced_piece = piece;
+		candidate = 1;
+		while ((candidate <= 8))
+		{
+			loc = CheckersHintLocation(piece, candidate);
+			if (CheckersBotMoveAllowed(current_turn, forced_piece, piece, loc))
+				AddMoveHint(loc, CheckersBotMoveIsJump(piece, loc));
+			candidate = (candidate + 1);
+		}
+		return;
+	}
+	ChessRebuildOccupancy();
+	candidate_count = ChessCandidateCount(piece);
+	candidate = 1;
+	while ((candidate <= candidate_count))
+	{
+		loc = ChessCandidateLocation(piece, candidate);
+		if (ChessMoveIsLegal(piece, loc, 1))
+			AddMoveHint(loc, (ChessCapturedForMove(piece, loc) != world));
+		if (ChessCandidateEndsRay(piece, candidate, loc))
+			candidate = (floor(((candidate - 1) / 7)) * 7) + 7;
+		candidate = (candidate + 1);
+	}
+};
+
 void() ClearSelectionEffect =
 {
+	ClearMoveHints();
 	if ((selection_effect_piece != world))
 	{
 		selection_effect_piece.effects = (selection_effect_piece.effects - (selection_effect_piece.effects & EF_RED));
@@ -867,7 +987,7 @@ float(entity ent) CheckersMaybePromote =
 			ent.effects = (ent.effects | EF_BLUE);
 		else
 			ent.effects = (ent.effects | EF_BRIGHTLIGHT);
-		bprint("** Checkers man crowned king\n");
+		bprint("\xC3\xE8\xE5\xE3\xEB\xE5\xF2\xF3 piece crowned king\n");
 		mysprint(ent.owner, "Checker crowned king\n");
 		return (TRUE);
 	}
@@ -1095,18 +1215,18 @@ void() CheckersApplyBotCvars =
 	}
 	if (((game_checkers && (player1 != world)) && (player1.chess_team == "black")))
 	{
-		player1.netname = "Red (Red Armored Pieces)";
+		player1.netname = "Red";
 	}
 	if (((game_checkers && (player2 != world)) && (player2.chess_team == "white")))
 	{
-		player2.netname = "Black (Blue Armored Pieces)";
+		player2.netname = "Black";
 	}
 	bot_side = floor(cvar("bot"));
 	if ((((bot_side == 1) || (bot_side == 3)) && (player1 != world)))
 	{
 		player1.is_bot = TRUE;
 		if (game_checkers)
-			player1.netname = "Red Bot (Red Armored Pieces)";
+			player1.netname = "Red Bot";
 		else
 			player1.netname = "Black Bot";
 		setmodel(player1, "progs/null.mdl");
@@ -1115,7 +1235,7 @@ void() CheckersApplyBotCvars =
 	{
 		player2.is_bot = TRUE;
 		if (game_checkers)
-			player2.netname = "Black Bot (Blue Armored Pieces)";
+			player2.netname = "Black Bot";
 		else
 			player2.netname = "White Bot";
 		setmodel(player2, "progs/null.mdl");
@@ -1878,14 +1998,14 @@ float(entity actor, entity piece, float loc) CheckersExecuteBotMove =
 	setorigin(dest_ent, dest_org);
 	mystuffcmd(actor, "play effects/button.wav\n");
 	WalkToDest(actor);
-	bprint("** Checkers: ");
+	bprint("\xC3\xE8\xE5\xE3\xEB\xE5\xF2\xF3: ");
 	if ((current_selected.chess_team == "white"))
 	{
-		bprint("Black (Blue Armored Pieces) ");
+		bprint("Black ");
 	}
 	else
 	{
-		bprint("Red (Red Armored Pieces) ");
+		bprint("Red ");
 	}
 	if (current_selected.isking)
 	{
@@ -1893,7 +2013,7 @@ float(entity actor, entity piece, float loc) CheckersExecuteBotMove =
 	}
 	else
 	{
-		bprint("man ");
+		bprint("piece ");
 	}
 	bprint(ftos(current_selected.location));
 	eatloc = current_selected.enemy;
@@ -2508,7 +2628,7 @@ void(entity ent, float loc) CheckersExplainInvalidMove =
 	if (ent.isking)
 		mysprint(ent.owner, "Invalid king move: checkers kings move one square diagonally in either direction, or capture by jumping diagonally.\n");
 	else
-		mysprint(ent.owner, "Invalid man move: men move one square diagonally forward, or capture by jumping diagonally forward.\n");
+		mysprint(ent.owner, "Invalid piece move: pieces move one square diagonally forward, or capture by jumping diagonally forward.\n");
 };
 
 float(entity ent, float loc, float actual_move) CanMove =
@@ -2628,6 +2748,8 @@ void() ProcessSelection =
 	local float locy;
 	local float locx;
 	local entity eatloc;
+	local entity clicked_piece;
+	local string my_color;
 
 	if (action_flag)
 	{
@@ -2636,6 +2758,22 @@ void() ProcessSelection =
 	if (((current_turn != self) && !single_player))
 	{
 		return;
+	}
+	if ((current_selected == world) && (current_destination != ""))
+	{
+		clicked_piece = EntityAtLoc(current_dest_int);
+		if (((clicked_piece != world) && (clicked_piece.owner != world)) && (clicked_piece.owner != current_turn))
+		{
+			if ((game_checkers && (current_turn.chess_team == "white")))
+				my_color = "Black";
+			else if ((game_checkers && (current_turn.chess_team == "black")))
+				my_color = "Red";
+			else if ((current_turn.chess_team == "white"))
+				my_color = "White";
+			else
+				my_color = "Black";
+			mysprint(self, strcat("That is your opponent's piece. You are playing ", my_color, ".\n"));
+		}
 	}
 	if ((current_selected != world))
 	{
@@ -2650,7 +2788,7 @@ void() ProcessSelection =
 				}
 				else
 				{
-					mysprint(self, "Man selected\n");
+					mysprint(self, "Piece selected\n");
 				}
 			}
 			else
@@ -2697,6 +2835,7 @@ void() ProcessSelection =
 			}
 			mystuffcmd(self, "play effects/button.wav\n");
 			ShowSelectionEffect(current_selected);
+			ShowMoveHints(current_selected);
 			if (!game_checkers)
 			{
 				if ((current_selected.classname == "chess_pawn"))
@@ -2926,14 +3065,14 @@ void() ProcessSelection =
 					}
 					if (game_checkers)
 					{
-						bprint("** Checkers: ");
+						bprint("\xC3\xE8\xE5\xE3\xEB\xE5\xF2\xF3: ");
 						if ((current_selected.chess_team == "white"))
 						{
-							bprint("Black (Blue Armored Pieces) ");
+							bprint("Black ");
 						}
 						else
 						{
-							bprint("Red (Red Armored Pieces) ");
+							bprint("Red ");
 						}
 						if (current_selected.isking)
 						{
@@ -2941,7 +3080,7 @@ void() ProcessSelection =
 						}
 						else
 						{
-							bprint("man ");
+							bprint("piece ");
 						}
 						bprint(ftos(current_selected.location));
 						eatloc = current_selected.enemy;
@@ -3209,7 +3348,7 @@ void() welcome_mesg =
 	sprint(self.owner, "  -------------------------\n");
 	sprint(self.owner, "\s     C R O W N Q U A K E\n");
 	sprint(self.owner, "  -------------------------\n");
-	sprint(self.owner, "Build: 2026-07-06-menu23\n");
+	sprint(self.owner, "Build: 2026-07-06-menu24\n");
 	if ((!menu_startup_pending && game_checkers))
 	{
 		sprint(self.owner, "Mode: Checkers\n");
@@ -3310,6 +3449,7 @@ void() CheckersFinishMove =
 		current_selected = self;
 		current_turn.chess_flags = (current_turn.chess_flags | CF_SELECTED_PIECE);
 		ShowSelectionEffect(self);
+		ShowMoveHints(self);
 		action_flag = FALSE;
 		mystuffcmd(current_turn, "bf\n");
 		CheckersMaybeScheduleBotTurn();
@@ -3339,7 +3479,7 @@ void() CheckCheckersGameOver =
 		mycentreprint(loser, "You have lost.");
 		loser.skin = MSG_BROADCAST;
 	}
-	bprint("** Checkers game over: ");
+	bprint("\xC3\xE8\xE5\xE3\xEB\xE5\xF2\xF3 game over: ");
 	if ((winner != world))
 	{
 		bprint(winner.netname);
@@ -3410,11 +3550,11 @@ void() next_turn =
 	{
 		if ((game_checkers && (current_turn.chess_team == "white")))
 		{
-			mysprint(current_turn, "Current turn: Black\n(Blue Armored Pieces)\n");
+			mysprint(current_turn, "Current turn: Black\n");
 		}
 		else if ((game_checkers && (current_turn.chess_team == "black")))
 		{
-			mysprint(current_turn, "Current turn: Red\n(Red Armored Pieces)\n");
+			mysprint(current_turn, "Current turn: Red\n");
 		}
 		else if ((current_turn.chess_team == "white"))
 		{

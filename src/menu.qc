@@ -56,6 +56,7 @@ entity(entity side) Menu_ClientForSide =
 
 void(entity client, float screen) Menu_OpenForClient =
 {
+	ClearMoveHints();
 	if ((client == world))
 	{
 		return;
@@ -496,6 +497,16 @@ void(float bot_side) Menu_SetCheckersBot =
 	Menu_Close();
 };
 
+void() Menu_ToggleMoveHints =
+{
+	if (cvar("movehints"))
+		cvar_set("movehints", "0");
+	else
+		cvar_set("movehints", "1");
+	ClearMoveHints();
+	self.menu_refresh = MSG_BROADCAST;
+};
+
 void() Menu_SelectPause =
 {
 	local entity loser;
@@ -538,33 +549,9 @@ void() Menu_SelectPause =
 		Menu_Open(MENU_SCREEN_NEWGAME);
 		return;
 	}
-	if ((((single_player || (player2 == world)) && (self.impulse == 5))))
+	if ((self.impulse == 5))
 	{
-		if (single_player)
-		{
-			Menu_SetCheckersBot(MSG_BROADCAST);
-		}
-		else
-		{
-			cvar_set("bot", "0");
-			Menu_Close();
-		}
-		return;
-	}
-	if ((((single_player || (player2 == world)) && (self.impulse == 6))))
-	{
-		if (game_checkers)
-			Menu_OpenCheckersBotLevel(1, MENU_SCREEN_PAUSE);
-		else
-			Menu_OpenCheckersBotLevel(2, MENU_SCREEN_PAUSE);
-		return;
-	}
-	if ((((single_player || (player2 == world)) && (self.impulse == 7))))
-	{
-		if (game_checkers)
-			Menu_OpenCheckersBotLevel(2, MENU_SCREEN_PAUSE);
-		else
-			Menu_OpenCheckersBotLevel(1, MENU_SCREEN_PAUSE);
+		Menu_ToggleMoveHints();
 		return;
 	}
 	if (((self.impulse == 20) || (self.impulse == 100)) || (self.impulse == 242))
@@ -842,15 +829,19 @@ void() Menu_RenderPause =
 	{
 		text = strcat("\n", "\xC3\xD2\xCF\xD7\xCE\xD1\xD5\xC1\xCB\xC5 \xCD\xC5\xCE\xD5", "\n\n");
 		text = strcat(text, Menu_Row(1, "Resume           "), Menu_Row(2, "Help             "), Menu_Row(3, "Resign           "), Menu_Row(4, "New Game         "));
-		if (game_checkers)
-			text = strcat(text, Menu_Row(5, "Bot Off          "), Menu_Row(6, "Bot Plays Red    "), Menu_Row(7, "Bot Plays Black  "));
+		if (cvar("movehints"))
+			text = strcat(text, Menu_Row(5, "Move Hints: On   "));
 		else
-			text = strcat(text, Menu_Row(5, "Bot Off          "), Menu_Row(6, "Bot Plays White  "), Menu_Row(7, "Bot Plays Black  "));
+			text = strcat(text, Menu_Row(5, "Move Hints: Off  "));
 		centerprint(self, text);
 		return;
 	}
 	text = strcat("\n", "\xC3\xD2\xCF\xD7\xCE\xD1\xD5\xC1\xCB\xC5 \xCD\xC5\xCE\xD5", "\n\n");
 	text = strcat(text, Menu_Row(1, "Resume           "), Menu_Row(2, "Help             "), Menu_Row(3, "Resign           "), Menu_Row(4, "New Game         "));
+	if (cvar("movehints"))
+		text = strcat(text, Menu_Row(5, "Move Hints: On   "));
+	else
+		text = strcat(text, Menu_Row(5, "Move Hints: Off  "));
 	centerprint(self, text);
 };
 

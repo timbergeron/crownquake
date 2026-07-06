@@ -134,6 +134,7 @@ void() worldspawn =
 	registercvar("chessperftwork", "2500");
 	registercvar("cq_debug", "0");
 	registercvar("cq_menustart", "0");
+	registercvar("movehints", "0");
 	lastspawn = world;
 	InitBodyQue();
 	if ((self.model == "maps/e1m8.bsp"))
