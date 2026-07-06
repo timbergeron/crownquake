@@ -863,7 +863,10 @@ float(entity ent) CheckersMaybePromote =
 	{
 		ent.isking = TRUE;
 		ent.netname = "king";
-		ent.effects = (ent.effects | EF_BRIGHTLIGHT);
+		if ((cvar("pr_checkextension") && checkextension("DP_EF_BLUE")))
+			ent.effects = (ent.effects | EF_BLUE);
+		else
+			ent.effects = (ent.effects | EF_BRIGHTLIGHT);
 		bprint("** Checkers man crowned king\n");
 		mysprint(ent.owner, "Checker crowned king\n");
 		return (TRUE);
@@ -3206,7 +3209,7 @@ void() welcome_mesg =
 	sprint(self.owner, "  -------------------------\n");
 	sprint(self.owner, "\s     C R O W N Q U A K E\n");
 	sprint(self.owner, "  -------------------------\n");
-	sprint(self.owner, "Build: 2026-07-06-menu21\n");
+	sprint(self.owner, "Build: 2026-07-06-menu23\n");
 	if ((!menu_startup_pending && game_checkers))
 	{
 		sprint(self.owner, "Mode: Checkers\n");

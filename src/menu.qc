@@ -932,8 +932,8 @@ void() Menu_RenderGameType =
 	text = strcat("\n", "\xD3\xC5\xCC\xC5\xC3\xD4 \xD0\xCC\xC1\xD9\xC5\xD2\xD3", "\n\n");
 	if (menu_selected_checkers)
 	{
-		text = strcat(text, Menu_Row(1, "Vs Computer        "), Menu_Row(2, "Two Players        "), Menu_Row(3, "Computer vs Computer"));
-		text = strcat(text, Menu_Row(4, "Back               "));
+		text = strcat(text, Menu_Row(1, "Vs Computer         "), Menu_Row(2, "Two Players         "), Menu_Row(3, "Computer vs Computer"));
+		text = strcat(text, Menu_Row(4, "Back                "));
 		centerprint(self, text);
 		return;
 	}
