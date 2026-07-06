@@ -363,6 +363,10 @@ void(float bot_side) Menu_StartCheckersBotGame =
 	{
 		localcmd("set bot 1\n");
 	}
+	else if ((bot_side == 3))
+	{
+		localcmd("set bot 3\n");
+	}
 	else
 	{
 		localcmd("set bot 2\n");
@@ -703,6 +707,11 @@ void() Menu_SelectGameType =
 	}
 	if ((self.impulse == 3))
 	{
+		Menu_OpenCheckersBotLevel(3, MENU_SCREEN_GAMETYPE);
+		return;
+	}
+	if ((self.impulse == 4))
+	{
 		Menu_Open(MENU_SCREEN_NEWGAME);
 		return;
 	}
@@ -918,22 +927,19 @@ void() Menu_RenderMap =
 
 void() Menu_RenderGameType =
 {
+	local string text;
+
+	text = strcat("\n", "\xD3\xC5\xCC\xC5\xC3\xD4 \xD0\xCC\xC1\xD9\xC5\xD2\xD3", "\n\n");
 	if (menu_selected_checkers)
 	{
-		centerprint(self,
-			"\n"
-			"\xD3\xC5\xCC\xC5\xC3\xD4 \xD0\xCC\xC1\xD9\xC5\xD2\xD3\n\n"
-			"  ", Menu_GoldNumber(1), "  Vs Computer        \n"
-			"  ", Menu_GoldNumber(2), "  Two Players        \n"
-			"  ", Menu_GoldNumber(3), "  Back               \n");
+		text = strcat(text, Menu_Row(1, "Vs Computer        "), Menu_Row(2, "Two Players        "), Menu_Row(3, "Computer vs Computer"));
+		text = strcat(text, Menu_Row(4, "Back               "));
+		centerprint(self, text);
 		return;
 	}
-	centerprint(self,
-		"\n"
-		"\xD3\xC5\xCC\xC5\xC3\xD4 \xD0\xCC\xC1\xD9\xC5\xD2\xD3\n\n"
-		"  ", Menu_GoldNumber(1), "  Single Player       \n"
-		"  ", Menu_GoldNumber(2), "  Multiplayer         \n"
-		"  ", Menu_GoldNumber(3), "  Back                \n");
+	text = strcat(text, Menu_Row(1, "Single Player       "), Menu_Row(2, "Multiplayer         "), Menu_Row(3, "Computer vs Computer"));
+	text = strcat(text, Menu_Row(4, "Back                "));
+	centerprint(self, text);
 };
 
 void() Menu_RenderSide =

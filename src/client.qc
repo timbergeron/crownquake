@@ -478,7 +478,7 @@ void() PutClientInServer =
 			if (Menu_ResumeRestartSelection())
 			{
 			}
-			else if (((floor(cvar("bot")) == 1) || (floor(cvar("bot")) == 2)))
+			else if ((((floor(cvar("bot")) == 1) || (floor(cvar("bot")) == 2)) || (floor(cvar("bot")) == 3)))
 			{
 				menu_startup_shown = TRUE;
 				Menu_StartNewGame(game_checkers);

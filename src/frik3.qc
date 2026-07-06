@@ -1099,7 +1099,7 @@ void() CheckersApplyBotCvars =
 		player2.netname = "Black (Blue Armored Pieces)";
 	}
 	bot_side = floor(cvar("bot"));
-	if (((bot_side == 1) && (player1 != world)))
+	if ((((bot_side == 1) || (bot_side == 3)) && (player1 != world)))
 	{
 		player1.is_bot = TRUE;
 		if (game_checkers)
@@ -1108,7 +1108,7 @@ void() CheckersApplyBotCvars =
 			player1.netname = "Black Bot";
 		setmodel(player1, "progs/null.mdl");
 	}
-	if (((bot_side == 2) && (player2 != world)))
+	if ((((bot_side == 2) || (bot_side == 3)) && (player2 != world)))
 	{
 		player2.is_bot = TRUE;
 		if (game_checkers)
@@ -3206,7 +3206,7 @@ void() welcome_mesg =
 	sprint(self.owner, "  -------------------------\n");
 	sprint(self.owner, "\s     C R O W N Q U A K E\n");
 	sprint(self.owner, "  -------------------------\n");
-	sprint(self.owner, "Build: 2026-07-06-menu20\n");
+	sprint(self.owner, "Build: 2026-07-06-menu21\n");
 	if ((!menu_startup_pending && game_checkers))
 	{
 		sprint(self.owner, "Mode: Checkers\n");
