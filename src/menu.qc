@@ -186,6 +186,9 @@ void() Menu_OpenStartupModeSelect =
 
 void(float use_checkers) Menu_StartWaitingForSecondPlayer =
 {
+	ChessPerftCancel();
+	CheckersCancelBotSearch();
+	ChessCancelBotSearch();
 	ClearSelectionEffect();
 	menu_startup_pending = FALSE;
 	Menu_ClearAllClients();
@@ -220,6 +223,9 @@ void(float use_checkers) Menu_StartWaitingForSecondPlayer =
 		player1.currentammo = MSG_BROADCAST;
 		player1.chess_flags = MSG_BROADCAST;
 		player1.skin = 1;
+		player1.last_moved = world;
+		player1.last_move_from = MSG_BROADCAST;
+		player1.last_move_to = MSG_BROADCAST;
 		AllocateMonsters(player1);
 		message_target = Menu_ClientForSide(player1);
 		if ((message_entity == world))
@@ -348,10 +354,10 @@ void(float bot_side) Menu_StartCheckersBotGame =
 	cvar_set("bot", ftos(bot_side));
 	if (single_player)
 	{
-		Menu_StartNewGame(TRUE);
+		Menu_StartNewGame(menu_selected_checkers);
 		return;
 	}
-	cvar_set("checkers", "1");
+	cvar_set("checkers", ftos(menu_selected_checkers));
 	cvar_set("teamplay", "0");
 	if ((bot_side == 1))
 	{
@@ -361,10 +367,13 @@ void(float bot_side) Menu_StartCheckersBotGame =
 	{
 		localcmd("set bot 2\n");
 	}
-	localcmd("set checkers 1\n");
+	if (menu_selected_checkers)
+		localcmd("set checkers 1\n");
+	else
+		localcmd("set checkers 0\n");
 	localcmd("set teamplay 0\n");
 	Menu_DebugState(self, "queue bot restart", bot_side);
-	centerprint(self, "Starting single-player checkers...\n");
+	centerprint(self, "Starting single-player game...\n");
 	localcmd("restart\n");
 };
 
@@ -378,32 +387,22 @@ void(float depth) Menu_SetCheckersBotDepth =
 	{
 		depth = 5;
 	}
-	cvar_set("botdepth", ftos(depth));
-	if ((depth == 1))
+	if (menu_selected_checkers)
 	{
-		localcmd("set botdepth 1\n");
-		return;
+		cvar_set("checkersbotdepth", ftos(depth));
+		localcmd(strcat("set checkersbotdepth ", ftos(depth), "\n"));
 	}
-	if ((depth == 2))
+	else
 	{
-		localcmd("set botdepth 2\n");
-		return;
+		cvar_set("chessbotlevel", ftos(depth));
+		localcmd(strcat("set chessbotlevel ", ftos(depth), "\n"));
 	}
-	if ((depth == 3))
-	{
-		localcmd("set botdepth 3\n");
-		return;
-	}
-	if ((depth == 4))
-	{
-		localcmd("set botdepth 4\n");
-		return;
-	}
-	localcmd("set botdepth 5\n");
 };
 
 void(float bot_side, float return_screen) Menu_OpenCheckersBotLevel =
 {
+	if ((return_screen == MENU_SCREEN_PAUSE))
+		menu_selected_checkers = game_checkers;
 	menu_selected_bot_side = bot_side;
 	self.menu_return_screen = return_screen;
 	Menu_Open(MENU_SCREEN_BOTLEVEL);
@@ -440,6 +439,9 @@ void(entity loser) Menu_ResignSide =
 		return;
 	}
 	winner = loser.opponent;
+	ChessPerftCancel();
+	CheckersCancelBotSearch();
+	ChessCancelBotSearch();
 	gameover = TRUE;
 	action_flag = TRUE;
 	ClearSelectionEffect();
@@ -483,14 +485,10 @@ void(float bot_side) Menu_SetCheckersBot =
 		self.menu_refresh = MSG_BROADCAST;
 		return;
 	}
-	if (!game_checkers)
-	{
-		self.menu_refresh = MSG_BROADCAST;
-		return;
-	}
 	cvar_set("bot", ftos(bot_side));
 	CheckersApplyBotCvars();
 	CheckersMaybeScheduleBotTurn();
+	ChessMaybeScheduleBotTurn();
 	Menu_Close();
 };
 
@@ -518,7 +516,10 @@ void() Menu_SelectPause =
 		}
 		if (single_player)
 		{
-			loser = current_turn;
+			if (current_turn.is_bot)
+				loser = current_turn.opponent;
+			else
+				loser = current_turn;
 		}
 		else
 		{
@@ -533,7 +534,7 @@ void() Menu_SelectPause =
 		Menu_Open(MENU_SCREEN_NEWGAME);
 		return;
 	}
-	if (((game_checkers && (single_player || (player2 == world))) && (self.impulse == 5)))
+	if ((((single_player || (player2 == world)) && (self.impulse == 5))))
 	{
 		if (single_player)
 		{
@@ -546,14 +547,20 @@ void() Menu_SelectPause =
 		}
 		return;
 	}
-	if (((game_checkers && (single_player || (player2 == world))) && (self.impulse == 6)))
+	if ((((single_player || (player2 == world)) && (self.impulse == 6))))
 	{
-		Menu_OpenCheckersBotLevel(1, MENU_SCREEN_PAUSE);
+		if (game_checkers)
+			Menu_OpenCheckersBotLevel(1, MENU_SCREEN_PAUSE);
+		else
+			Menu_OpenCheckersBotLevel(2, MENU_SCREEN_PAUSE);
 		return;
 	}
-	if (((game_checkers && (single_player || (player2 == world))) && (self.impulse == 7)))
+	if ((((single_player || (player2 == world)) && (self.impulse == 7))))
 	{
-		Menu_OpenCheckersBotLevel(2, MENU_SCREEN_PAUSE);
+		if (game_checkers)
+			Menu_OpenCheckersBotLevel(2, MENU_SCREEN_PAUSE);
+		else
+			Menu_OpenCheckersBotLevel(1, MENU_SCREEN_PAUSE);
 		return;
 	}
 	if (((self.impulse == 20) || (self.impulse == 100)) || (self.impulse == 242))
@@ -653,14 +660,7 @@ void() Menu_SelectGameType =
 {
 	if ((self.impulse == 1))
 	{
-		if (menu_selected_checkers)
-		{
-			Menu_Open(MENU_SCREEN_SIDE);
-		}
-		else
-		{
-			Menu_StartSelectedGame(TRUE);
-		}
+		Menu_Open(MENU_SCREEN_SIDE);
 		return;
 	}
 	if ((self.impulse == 2))
@@ -680,12 +680,18 @@ void() Menu_SelectSide =
 {
 	if ((self.impulse == 1))
 	{
-		Menu_OpenCheckersBotLevel(2, MENU_SCREEN_SIDE);
+		if (menu_selected_checkers)
+			Menu_OpenCheckersBotLevel(2, MENU_SCREEN_SIDE);
+		else
+			Menu_OpenCheckersBotLevel(1, MENU_SCREEN_SIDE);
 		return;
 	}
 	if ((self.impulse == 2))
 	{
-		Menu_OpenCheckersBotLevel(1, MENU_SCREEN_SIDE);
+		if (menu_selected_checkers)
+			Menu_OpenCheckersBotLevel(1, MENU_SCREEN_SIDE);
+		else
+			Menu_OpenCheckersBotLevel(2, MENU_SCREEN_SIDE);
 		return;
 	}
 	if ((self.impulse == 3))
@@ -785,11 +791,14 @@ void() Menu_RenderPause =
 			"  ", Menu_GoldNumber(2), "  Help             \n");
 		return;
 	}
-	if ((game_checkers && (single_player || (player2 == world))))
+	if ((single_player || (player2 == world)))
 	{
 		text = strcat("\n", "\xC3\xD2\xCF\xD7\xCE\xD1\xD5\xC1\xCB\xC5 \xCD\xC5\xCE\xD5", "\n\n");
 		text = strcat(text, Menu_Row(1, "Resume           "), Menu_Row(2, "Help             "), Menu_Row(3, "Resign           "), Menu_Row(4, "New Game         "));
-		text = strcat(text, Menu_Row(5, "Bot Off          "), Menu_Row(6, "Bot Plays Red    "), Menu_Row(7, "Bot Plays Black  "));
+		if (game_checkers)
+			text = strcat(text, Menu_Row(5, "Bot Off          "), Menu_Row(6, "Bot Plays Red    "), Menu_Row(7, "Bot Plays Black  "));
+		else
+			text = strcat(text, Menu_Row(5, "Bot Off          "), Menu_Row(6, "Bot Plays White  "), Menu_Row(7, "Bot Plays Black  "));
 		centerprint(self, text);
 		return;
 	}
@@ -834,7 +843,10 @@ void() Menu_RenderGameOver =
 {
 	local string text;
 
-	text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nWinner: ", self.menu_winner.netname, "\n\n");
+	if ((self.menu_winner == world))
+		text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nDraw by stalemate\n\n");
+	else
+		text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nWinner: ", self.menu_winner.netname, "\n\n");
 	text = strcat(text, Menu_Row(1, "Rematch          "), Menu_Row(2, "New Game         "), Menu_Row(3, "Help             "), Menu_Row(4, "Close            "));
 	centerprint(self, text);
 };
@@ -880,6 +892,16 @@ void() Menu_RenderGameType =
 
 void() Menu_RenderSide =
 {
+	if (!menu_selected_checkers)
+	{
+		centerprint(self,
+			"\n"
+			"\xD3\xC5\xCC\xC5\xC3\xD4 \xD3\xC9\xC4\xC5\n\n"
+			"  ", Menu_GoldNumber(1), "  Play White            \n"
+			"  ", Menu_GoldNumber(2), "  Play Black            \n"
+			"  ", Menu_GoldNumber(3), "  Back                  \n");
+		return;
+	}
 	centerprint(self,
 		"\n"
 		"\xD3\xC5\xCC\xC5\xC3\xD4 \xD3\xC9\xC4\xC5\n\n"
@@ -892,7 +914,10 @@ void() Menu_RenderBotLevel =
 {
 	local string text;
 
-	text = strcat("\n", "\xD3\xC5\xCC\xC5\xC3\xD4 \xC1\xC9", "\n\n");
+	if (menu_selected_checkers)
+		text = strcat("\n", "\xC3\xC8\xC5\xC3\xCB\xC5\xD2\xD3 \xC2\xCF\xD4 \xCC\xC5\xD6\xC5\xCC", "\n\n");
+	else
+		text = strcat("\n", "\xC3\xC8\xC5\xD3\xD3 \xC2\xCF\xD4 \xCC\xC5\xD6\xC5\xCC", "\n\n");
 	text = strcat(text, Menu_Row(1, "Novice              "), Menu_Row(2, "Easy                "), Menu_Row(3, "Normal              "));
 	text = strcat(text, Menu_Row(4, "Hard                "), Menu_Row(5, "Expert              "), Menu_Row(6, "Back                "));
 	centerprint(self, text);

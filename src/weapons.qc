@@ -1111,6 +1111,15 @@ void() ImpulseCommands =
 {
 	local entity checklight;
 
+	if (chess_perft_running)
+	{
+		if ((self.impulse == 243))
+			ChessPerftCancel();
+		else
+			mysprint(self, "Chess perft is running; impulse 243 cancels it\n");
+		self.impulse = MSG_BROADCAST;
+		return;
+	}
 	if (self.menu_screen)
 	{
 		Menu_Select(self.impulse);
@@ -1162,9 +1171,15 @@ void() ImpulseCommands =
 	{
 		ShowBoard();
 	}
+	if ((self.impulse == 243))
+	{
+		ChessPerftStart(self);
+		self.impulse = MSG_BROADCAST;
+		return;
+	}
 	if ((self.spectator != TRUE))
 	{
-		if (((((game_checkers && !gameover) && (current_turn != world)) && current_turn.is_bot) && (((self.impulse == 20) || (self.impulse == 60)) || (self.impulse == 100))))
+		if ((((!gameover && (current_turn != world)) && current_turn.is_bot) && (((self.impulse == 20) || (self.impulse == 60)) || (self.impulse == 100))))
 		{
 			centerprint(self, "Computer is thinking\n");
 			self.impulse = MSG_BROADCAST;
@@ -1267,6 +1282,9 @@ void() ImpulseCommands =
 						return;
 					}
 					mycentreprint(current_turn, "Turn passed\n");
+					current_turn.last_moved = world;
+					current_turn.last_move_from = MSG_BROADCAST;
+					current_turn.last_move_to = MSG_BROADCAST;
 					next_turn();
 				}
 			}

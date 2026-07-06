@@ -571,6 +571,9 @@ void() SpawnCheckersBoard =
 
 void(float use_checkers) ResetGameToMode =
 {
+	ChessPerftCancel();
+	CheckersCancelBotSearch();
+	ChessCancelBotSearch();
 	ClearSelectionEffect();
 	game_checkers = use_checkers;
 	gameover = FALSE;
@@ -607,6 +610,9 @@ void(float use_checkers) ResetGameToMode =
 		player1.currentammo = MSG_BROADCAST;
 		player1.chess_flags = MSG_BROADCAST;
 		player1.skin = 1;
+		player1.last_moved = world;
+		player1.last_move_from = MSG_BROADCAST;
+		player1.last_move_to = MSG_BROADCAST;
 		AllocateMonsters(player1);
 	}
 	if ((player2 != world))
@@ -615,6 +621,9 @@ void(float use_checkers) ResetGameToMode =
 		player2.currentammo = MSG_BROADCAST;
 		player2.chess_flags = MSG_BROADCAST;
 		player2.skin = 1;
+		player2.last_moved = world;
+		player2.last_move_from = MSG_BROADCAST;
+		player2.last_move_to = MSG_BROADCAST;
 		AllocateMonsters(player2);
 	}
 	CheckersApplyBotCvars();
@@ -639,6 +648,7 @@ void(float use_checkers) ResetGameToMode =
 		mystuffcmd(current_turn, "bf\n");
 	}
 	CheckersMaybeScheduleBotTurn();
+	ChessMaybeScheduleBotTurn();
 };
 
 float(entity ent, float loc) CheckersCanStepTo =
@@ -998,7 +1008,9 @@ float() CheckersBotDepth =
 {
 	local float depth;
 
-	depth = floor(cvar("botdepth"));
+	depth = floor(cvar("checkersbotdepth"));
+	if ((depth < 1))
+		depth = floor(cvar("botdepth"));
 	if ((depth < 1))
 	{
 		depth = 3;
@@ -1024,6 +1036,26 @@ float() CheckersBotDelay =
 		delay = 5;
 	}
 	return (delay);
+};
+
+float() CheckersBotWorkLimit =
+{
+	local float configured;
+	local float depth;
+
+	configured = floor(cvar("checkersbotwork"));
+	if ((configured > MSG_BROADCAST))
+	{
+		if ((configured < 100)) configured = 100;
+		if ((configured > 5000)) configured = 5000;
+		return (configured);
+	}
+	depth = CheckersBotDepth();
+	if ((depth == 1)) return (300);
+	if ((depth == 2)) return (600);
+	if ((depth == 3)) return (900);
+	if ((depth == 4)) return (1300);
+	return (1800);
 };
 
 void() CheckersApplyBotCvars =
@@ -1058,15 +1090,11 @@ void() CheckersApplyBotCvars =
 	{
 		player2.netname = "White";
 	}
-	if (!game_checkers)
-	{
-		return;
-	}
-	if (((player1 != world) && (player1.chess_team == "black")))
+	if (((game_checkers && (player1 != world)) && (player1.chess_team == "black")))
 	{
 		player1.netname = "Red (Red Armored Pieces)";
 	}
-	if (((player2 != world) && (player2.chess_team == "white")))
+	if (((game_checkers && (player2 != world)) && (player2.chess_team == "white")))
 	{
 		player2.netname = "Black (Blue Armored Pieces)";
 	}
@@ -1074,13 +1102,19 @@ void() CheckersApplyBotCvars =
 	if (((bot_side == 1) && (player1 != world)))
 	{
 		player1.is_bot = TRUE;
-		player1.netname = "Red Bot (Red Armored Pieces)";
+		if (game_checkers)
+			player1.netname = "Red Bot (Red Armored Pieces)";
+		else
+			player1.netname = "Black Bot";
 		setmodel(player1, "progs/null.mdl");
 	}
 	if (((bot_side == 2) && (player2 != world)))
 	{
 		player2.is_bot = TRUE;
-		player2.netname = "Black Bot (Blue Armored Pieces)";
+		if (game_checkers)
+			player2.netname = "Black Bot (Blue Armored Pieces)";
+		else
+			player2.netname = "White Bot";
 		setmodel(player2, "progs/null.mdl");
 	}
 };
@@ -1251,6 +1285,12 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 	local float score;
 	local float is_jump;
 
+	checkers_bot_work = (checkers_bot_work + 1);
+	if ((checkers_bot_work > checkers_bot_work_limit))
+	{
+		checkers_bot_abort = TRUE;
+		return (-1234567);
+	}
 	if (!CheckersBotMoveAllowed(side, forced_piece, piece, loc))
 	{
 		return (-1234567);
@@ -1296,6 +1336,8 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 		captured.location = captured_location;
 		captured.ischecker = captured_ischecker;
 	}
+	if (checkers_bot_abort)
+		return (-1234567);
 	return (score);
 };
 
@@ -1315,6 +1357,8 @@ float(entity side, entity forced_piece, float depth, float alpha, float beta) Ch
 	{
 		return (CheckersBotEvaluate());
 	}
+	if (checkers_bot_abort)
+		return (MSG_BROADCAST);
 	maximize = (side == checkers_bot_side);
 	if (maximize)
 	{
@@ -1651,7 +1695,7 @@ void(entity piece, float loc) CheckersBotConsiderRootMove =
 	}
 };
 
-void() CheckersBotChooseMove =
+void() CheckersBotChooseIteration =
 {
 	local entity trav;
 
@@ -1659,7 +1703,6 @@ void() CheckersBotChooseMove =
 	checkers_bot_best_dest = MSG_BROADCAST;
 	checkers_bot_best_score = -100000;
 	checkers_bot_side = current_turn;
-	checkers_bot_search_depth = CheckersBotDepth();
 	if (checkers_must_jump)
 	{
 		trav = current_selected;
@@ -1693,6 +1736,120 @@ void() CheckersBotChooseMove =
 			trav = find(trav, chess_team, current_turn.chess_team);
 		}
 	}
+};
+
+void() CheckersBotChooseMove =
+{
+	local entity completed_piece;
+	local float completed_dest;
+	local float completed_score;
+	local float completed_depth;
+	local float target_depth;
+
+	completed_piece = world;
+	completed_dest = MSG_BROADCAST;
+	completed_score = -100000;
+	completed_depth = MSG_BROADCAST;
+	target_depth = CheckersBotDepth();
+	checkers_bot_work_limit = CheckersBotWorkLimit();
+	checkers_bot_search_depth = 1;
+	checkers_bot_work = MSG_BROADCAST;
+	while ((checkers_bot_search_depth <= target_depth))
+	{
+		checkers_bot_abort = FALSE;
+		CheckersBotChooseIteration();
+		if (checkers_bot_abort)
+		{
+			if (cvar("botdebug"))
+			{
+				bprint("** Checkers bot depth ");
+				bprint(ftos(checkers_bot_search_depth));
+				bprint(" exceeded work budget ");
+				bprint(ftos(checkers_bot_work_limit));
+				bprint("\n");
+			}
+			checkers_bot_search_depth = (target_depth + 1);
+		}
+		else
+		{
+			if ((checkers_bot_best_piece != world))
+			{
+				completed_piece = checkers_bot_best_piece;
+				completed_dest = checkers_bot_best_dest;
+				completed_score = checkers_bot_best_score;
+				completed_depth = checkers_bot_search_depth;
+			}
+			checkers_bot_search_depth = (checkers_bot_search_depth + 1);
+		}
+	}
+	checkers_bot_best_piece = completed_piece;
+	checkers_bot_best_dest = completed_dest;
+	checkers_bot_best_score = completed_score;
+	if (cvar("botdebug"))
+	{
+		bprint("** Checkers bot completed depth ");
+		bprint(ftos(completed_depth));
+		bprint("\n");
+	}
+};
+
+float() CheckersBotPositionChecksum =
+{
+	local entity piece;
+	local float checksum;
+
+	checksum = MSG_BROADCAST;
+	piece = find(world, chess_team, "white");
+	while ((piece != world))
+	{
+		if (((piece.ischecker && (piece.health > MSG_BROADCAST)) && (piece.flags & FL_MONSTER)))
+			checksum = (checksum + (piece.location * 17) + (piece.isking * 101));
+		piece = find(piece, chess_team, "white");
+	}
+	piece = find(world, chess_team, "black");
+	while ((piece != world))
+	{
+		if (((piece.ischecker && (piece.health > MSG_BROADCAST)) && (piece.flags & FL_MONSTER)))
+			checksum = (checksum + (piece.location * 31) + (piece.isking * 211));
+		piece = find(piece, chess_team, "black");
+	}
+	return (checksum);
+};
+
+float() CheckersBotLiveCount =
+{
+	local entity piece;
+	local float count;
+
+	count = MSG_BROADCAST;
+	piece = find(world, chess_team, "white");
+	while ((piece != world))
+	{
+		if (((piece.ischecker && (piece.health > MSG_BROADCAST)) && (piece.flags & FL_MONSTER)))
+			count = (count + 1);
+		piece = find(piece, chess_team, "white");
+	}
+	piece = find(world, chess_team, "black");
+	while ((piece != world))
+	{
+		if (((piece.ischecker && (piece.health > MSG_BROADCAST)) && (piece.flags & FL_MONSTER)))
+			count = (count + 1);
+		piece = find(piece, chess_team, "black");
+	}
+	return (count);
+};
+
+void(string reason) CheckersBotFailSafe =
+{
+	bprint("** CHECKERS BOT ERROR: ");
+	bprint(reason);
+	bprint("; continuing as a human player\n");
+	cvar_set("bot", "0");
+	CheckersApplyBotCvars();
+	action_flag = FALSE;
+	current_selected = world;
+	ClearSelectionEffect();
+	ClearLastHighlight();
 };
 
 float(entity actor, entity piece, float loc) CheckersExecuteBotMove =
@@ -1747,6 +1904,9 @@ float(entity actor, entity piece, float loc) CheckersExecuteBotMove =
 	}
 	bprint(ftos(current_dest_int));
 	bprint("\n");
+	current_turn.last_moved = current_selected;
+	current_turn.last_move_from = current_selected.location;
+	current_turn.last_move_to = current_dest_int;
 	LastMoved = current_selected;
 	LastMovedLocation = current_dest_int;
 	current_selected.location = current_dest_int;
@@ -1757,6 +1917,9 @@ float(entity actor, entity piece, float loc) CheckersExecuteBotMove =
 
 void() CheckersBotThink =
 {
+	local float checksum_before;
+	local float count_before;
+
 	if ((self == checkers_bot_thinker))
 	{
 		checkers_bot_thinker = world;
@@ -1783,7 +1946,15 @@ void() CheckersBotThink =
 		checkers_bot_thinker = self;
 		return;
 	}
+	checksum_before = CheckersBotPositionChecksum();
+	count_before = CheckersBotLiveCount();
 	CheckersBotChooseMove();
+	if (((CheckersBotPositionChecksum() != checksum_before) || (CheckersBotLiveCount() != count_before)))
+	{
+		CheckersBotFailSafe("search state was not restored");
+		remove(self);
+		return;
+	}
 	if ((checkers_bot_best_piece == world))
 	{
 		remove(self);
@@ -1793,29 +1964,32 @@ void() CheckersBotThink =
 		}
 		else
 		{
-			bprint("** Checkers bot found no move despite legal moves\n");
-			current_turn.is_bot = FALSE;
+			CheckersBotFailSafe("no completed move despite legal moves");
 		}
 		return;
 	}
 	if (!CheckersExecuteBotMove(current_turn, checkers_bot_best_piece, checkers_bot_best_dest))
 	{
-		bprint("** Checkers bot could not execute selected move\n");
-		current_turn.is_bot = FALSE;
-		action_flag = FALSE;
+		CheckersBotFailSafe("live validation rejected selected move");
 		remove(self);
 		return;
 	}
 	remove(self);
 };
 
-void() CheckersMaybeScheduleBotTurn =
+void() CheckersCancelBotSearch =
 {
 	if ((checkers_bot_thinker != world))
 	{
 		remove(checkers_bot_thinker);
 		checkers_bot_thinker = world;
 	}
+	checkers_bot_abort = FALSE;
+};
+
+void() CheckersMaybeScheduleBotTurn =
+{
+	CheckersCancelBotSearch();
 	if (((!game_checkers || gameover) || (current_turn == world)))
 	{
 		return;
@@ -1846,7 +2020,6 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckValidMove =
 	local float pawning_loc;
 	local float valid;
 	local float castle_loc;
-	local float rtemp_loc;
 	local entity castle;
 	local entity pawning_ent;
 	local string str;
@@ -2021,45 +2194,8 @@ float(entity ent, float loc, entity at_loc, float actual_move) CheckValidMove =
 								{
 									if ((fabs(xchange) == SPAWNFLAG_LASER))
 									{
-										if ((RalCanDie(ent, world) == TRUE))
-										{
-											if (actual_move)
-											{
-												mycentreprint(current_turn, "Cannot castle out of Check");
-											}
+										if (!actual_move)
 											return (MSG_BROADCAST);
-										}
-										rtemp_loc = ent.location;
-										if ((newx < oldx))
-										{
-											ent.location = (((oldx - SPAWN_CRUCIFIED) * 10) + oldy);
-										}
-										else
-										{
-											ent.location = (((oldx + SPAWN_CRUCIFIED) * 10) + oldy);
-										}
-										if ((RalCanDie(ent, world) == TRUE))
-										{
-											ent.location = rtemp_loc;
-											if (actual_move)
-											{
-												mycentreprint(ent.owner, "Cannot castle through Check");
-											}
-											return (MSG_BROADCAST);
-										}
-										ent.location = rtemp_loc;
-										rtemp_loc = ent.location;
-										ent.location = loc;
-										if ((RalCanDie(ent, world) == TRUE))
-										{
-											ent.location = rtemp_loc;
-											if (actual_move)
-											{
-												mycentreprint(ent.owner, "Cannot castle into Check");
-											}
-											return (MSG_BROADCAST);
-										}
-										ent.location = rtemp_loc;
 										if ((newx < oldx))
 										{
 											castle_loc = (10 + GetY(ent.location));
@@ -2334,12 +2470,48 @@ void() random_rook_speech =
 	}
 };
 
+void(entity ent, float loc) CheckersExplainInvalidMove =
+{
+	local entity at_loc;
+
+	if ((ent == world))
+		return;
+	if (!ent.ischecker)
+	{
+		mysprint(ent.owner, "Invalid move: the selected entity is not a checkers piece.\n");
+		return;
+	}
+	if (!CheckersOnBoard(loc))
+	{
+		mysprint(ent.owner, "Invalid move: the destination is outside the board.\n");
+		return;
+	}
+	at_loc = EntityAtLoc(loc);
+	if ((at_loc != world))
+	{
+		mysprint(ent.owner, "Invalid move: a checkers piece can only move to an empty square.\n");
+		return;
+	}
+	if ((checkers_must_jump && (ent != current_selected)))
+	{
+		mysprint(ent.owner, "Invalid move: finish the multi-jump with the currently selected piece.\n");
+		return;
+	}
+	if ((checkers_must_jump || CheckersAnyCaptureAvailable(ent.owner)))
+	{
+		mysprint(ent.owner, "Invalid move: a capture is available and must be taken by jumping an enemy piece.\n");
+		return;
+	}
+	if (ent.isking)
+		mysprint(ent.owner, "Invalid king move: checkers kings move one square diagonally in either direction, or capture by jumping diagonally.\n");
+	else
+		mysprint(ent.owner, "Invalid man move: men move one square diagonally forward, or capture by jumping diagonally forward.\n");
+};
+
 float(entity ent, float loc, float actual_move) CanMove =
 {
 	local entity at_loc;
-	local entity king;
 	local float result;
-	local float temp_loc;
 
 	at_loc = EntityAtLoc(loc);
 	if ((((at_loc != world) && (at_loc.owner == ent.owner)) && (at_loc != ignore_canmove)))
@@ -2365,43 +2537,37 @@ float(entity ent, float loc, float actual_move) CanMove =
 			}
 			else
 			{
-				mycentreprint(ent.owner, "You already have a piece there..");
+				if (!game_checkers)
+				{
+					ChessRebuildOccupancy();
+					ChessExplainInvalidMove(ent, loc);
+				}
+				else
+					CheckersExplainInvalidMove(ent, loc);
 			}
 		}
 		return (FALSE);
+	}
+	if ((!game_checkers && actual_move))
+	{
+		ChessRebuildOccupancy();
+		if (!ChessMoveIsLegal(ent, loc, 1))
+		{
+			ChessExplainInvalidMove(ent, loc);
+			return (FALSE);
+		}
 	}
 	result = CheckValidMove(ent, loc, at_loc, actual_move);
 	if ((result == MSG_BROADCAST))
 	{
 		if (actual_move)
 		{
-			if ((!game_checkers || !checkers_invalid_notified))
-			{
-				mysprint(ent.owner, "Invalid move for that piece\n");
-			}
+			if (!game_checkers)
+				mysprint(ent.owner, "Move rejected because the live board changed; select the piece and try again.\n");
+			else
+				CheckersExplainInvalidMove(ent, loc);
 		}
 		return (FALSE);
-	}
-	else
-	{
-		if (actual_move)
-		{
-			if (!game_checkers)
-			{
-				temp_loc = ent.location;
-				ent.location = loc;
-				king = get_king(ent.owner);
-				ignore_canmove = at_loc;
-				if (CanDie(king, at_loc))
-				{
-					mycentreprint(ent.owner, "This move places your King in danger");
-					ent.location = temp_loc;
-					return (FALSE);
-				}
-				ignore_canmove = world;
-				ent.location = temp_loc;
-			}
-		}
 	}
 	if (((result == SPAWNFLAG_LASER) && !game_checkers))
 	{
@@ -2988,6 +3154,9 @@ void() ProcessSelection =
 							bprint("\n");
 						}
 					}
+					current_turn.last_moved = current_selected;
+					current_turn.last_move_from = current_selected.location;
+					current_turn.last_move_to = current_dest_int;
 					LastMoved = current_selected;
 					LastMovedLocation = current_dest_int;
 					current_selected.location = current_dest_int;
@@ -3037,7 +3206,7 @@ void() welcome_mesg =
 	sprint(self.owner, "  -------------------------\n");
 	sprint(self.owner, "\s     C R O W N Q U A K E\n");
 	sprint(self.owner, "  -------------------------\n");
-	sprint(self.owner, "Build: 2026-07-05-menu19\n");
+	sprint(self.owner, "Build: 2026-07-06-chessai5\n");
 	if ((!menu_startup_pending && game_checkers))
 	{
 		sprint(self.owner, "Mode: Checkers\n");
@@ -3182,7 +3351,7 @@ void() CheckCheckersGameOver =
 
 void() next_turn =
 {
-	local entity king;
+	local entity side_to_move;
 
 	if (game_checkers)
 	{
@@ -3190,14 +3359,19 @@ void() next_turn =
 	}
 	if (!game_checkers)
 	{
-		king = get_king(current_turn.opponent);
-		if (RalCanDie(king, world))
+		side_to_move = current_turn.opponent;
+		ChessRebuildOccupancy();
+		if (!ChessHasLegalMove(side_to_move))
 		{
-			CheckOrMate();
-		}
-		if ((ralcheckmate == TRUE))
-		{
+			ChessFinishNoLegalMoves(side_to_move, current_turn);
 			return;
+		}
+		if (ChessInCheck(side_to_move))
+		{
+			sound(side_to_move, CHAN_AUTO, "voice/check.wav", SPAWN_CRUCIFIED, ATTN_NONE);
+			bprint("** ");
+			bprint(side_to_move.netname);
+			bprint(" is in check\n");
 		}
 	}
 	if ((single_player && !current_turn.is_bot))
@@ -3272,6 +3446,62 @@ void() next_turn =
 	}
 	action_flag = FALSE;
 	CheckersMaybeScheduleBotTurn();
+	ChessMaybeScheduleBotTurn();
+};
+
+void(entity side_to_move, entity winner) ChessFinishNoLegalMoves =
+{
+	local entity human_side;
+	local float checkmate;
+
+	checkmate = ChessInCheck(side_to_move);
+	gameover = TRUE;
+	action_flag = TRUE;
+	ClearSelectionEffect();
+	ClearLastHighlight();
+	current_selected = world;
+	if (checkmate)
+	{
+		ralcheckmate = TRUE;
+		sound(winner, CHAN_AUTO, "voice/chckmate.wav", SPAWN_CRUCIFIED, ATTN_NONE);
+		bprint("** Checkmate: ");
+		bprint(winner.netname);
+		bprint(" wins\n");
+		winner.skin = SPAWN_CRUCIFIED;
+		side_to_move.skin = MSG_BROADCAST;
+	}
+	else
+	{
+		bprint("** Stalemate: draw\n");
+		winner = world;
+	}
+	if (single_player)
+	{
+		human_side = world;
+		if ((((player1 != world) && !player1.is_bot) && ((player2 != world) && player2.is_bot)))
+			human_side = player1;
+		else if ((((player2 != world) && !player2.is_bot) && ((player1 != world) && player1.is_bot)))
+			human_side = player2;
+		if ((human_side != world))
+		{
+			if ((winner == world))
+				mycentreprint(human_side, "Draw by stalemate.");
+			else if ((winner == human_side))
+				mycentreprint(human_side, "YOU HAVE WON!");
+			else
+				mycentreprint(human_side, "You have lost.");
+		}
+	}
+	else
+	{
+		if ((winner != world))
+			mycentreprint(winner, "YOU HAVE WON!");
+		if (checkmate)
+			mycentreprint(side_to_move, "You have lost.");
+		else
+			mycentreprint(side_to_move, "Draw by stalemate.");
+	}
+	Menu_OpenGameOver(winner);
 };
 
 entity(entity monst) FindNewEnemy =

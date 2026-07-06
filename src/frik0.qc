@@ -376,6 +376,11 @@ void(float dist) ai_walk =
 			if (((!game_checkers && (self.classname == "chess_pawn")) && ((GetY(self.location) == CF_HAS_MOVED) || (GetY(self.location) == LASERTARG_ON))))
 			{
 				become_queen();
+				if (current_turn.is_bot)
+				{
+					ChessBotPromotePawn();
+					return;
+				}
 				mysprint(self.owner, "Pawn Promotion!\nPress Del to cycle piece\n");
 				mysprint(self.owner, "Click to promote\n");
 				mycentreprint(self.owner, "Promoting to: Queen\n");

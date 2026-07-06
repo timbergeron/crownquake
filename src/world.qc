@@ -122,7 +122,17 @@ void() worldspawn =
 	registercvar("checkers", "0");
 	registercvar("bot", "0");
 	registercvar("botdepth", "3");
+	registercvar("chessbotlevel", "0");
+	registercvar("checkersbotdepth", "0");
+	registercvar("checkersbotwork", "0");
 	registercvar("botdelay", "0.5");
+	registercvar("botwork", "0");
+	registercvar("botbatch", "12");
+	registercvar("botdebug", "0");
+	registercvar("chessperft", "3");
+	registercvar("chessperft_expected", "0");
+	registercvar("chessperftwork", "2500");
+	registercvar("cq_debug", "0");
 	registercvar("cq_menustart", "0");
 	lastspawn = world;
 	InitBodyQue();

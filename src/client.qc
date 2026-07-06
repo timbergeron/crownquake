@@ -478,10 +478,10 @@ void() PutClientInServer =
 			if (Menu_ResumeRestartSelection())
 			{
 			}
-			else if ((game_checkers && ((floor(cvar("bot")) == 1) || (floor(cvar("bot")) == 2))))
+			else if (((floor(cvar("bot")) == 1) || (floor(cvar("bot")) == 2)))
 			{
 				menu_startup_shown = TRUE;
-				Menu_StartNewGame(TRUE);
+				Menu_StartNewGame(game_checkers);
 			}
 			else
 			{
@@ -1220,6 +1220,9 @@ void() ClientConnect =
 
 void() ClientDisconnect =
 {
+	ChessPerftCancel();
+	CheckersCancelBotSearch();
+	ChessCancelBotSearch();
 	if (gameover)
 	{
 		return;
