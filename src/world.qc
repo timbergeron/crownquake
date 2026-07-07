@@ -127,7 +127,7 @@ void() worldspawn =
 	registercvar("checkersbotwork", "0");
 	registercvar("botdelay", "0.5");
 	registercvar("botwork", "0");
-	registercvar("botbatch", "12");
+	registercvar("botbatch", "4");
 	registercvar("botqdepth", "2");
 	registercvar("botdebug", "0");
 	registercvar("chessperft", "3");

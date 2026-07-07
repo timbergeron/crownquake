@@ -201,6 +201,11 @@ entity chess_bot_selected_before;
 float chess_bot_dest_before;
 entity chess_bot_ignore_before;
 float chess_bot_castle_dest_before;
+// Deferred "Computer thinking" notice: only announced if the computer is still on
+// the clock past BOT_THINK_ANNOUNCE_DELAY, so quick replies stay silent.
+float BOT_THINK_ANNOUNCE_DELAY = 3;
+float bot_think_deadline;
+float bot_think_announced;
 entity chess_perft_thinker;
 entity chess_perft_side;
 entity chess_perft_root_piece;
@@ -302,6 +307,7 @@ float SVC_SETVIEWANGLES    = 10;
 float() TwoPlayersInGame;
 void() FindSelection;
 void(entity plyr) AllocateMonsters;
+float() ComputerVsComputerGame;
 void() FindLocation;
 float(entity ent, float loc, entity at_loc, float actual_move) CheckValidMove;
 float(entity ent, float loc, float actual_move) CanMove;

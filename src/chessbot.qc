@@ -2,6 +2,7 @@
 
 float CHESS_BOT_INVALID = -1234567;
 float CHESS_BOT_MATE = 90000;
+float CHESS_BOT_FALLBACK_WORK_LIMIT = 100000;
 float chess_bot_eval_endgame;
 float chess_bot_white_pawns[9];
 float chess_bot_black_pawns[9];
@@ -509,16 +510,16 @@ float() ChessBotWorkLimit =
 	{
 		if ((configured < 100))
 			configured = 100;
-		if ((configured > 5000))
-			configured = 5000;
+		if ((configured > 12000))
+			configured = 12000;
 		return (configured);
 	}
 	level = ChessBotConfiguredLevel();
-	if ((level == 1)) return (700);
-	if ((level == 2)) return (1400);
-	if ((level == 3)) return (2200);
-	if ((level == 4)) return (3200);
-	return (4500);
+	if ((level == 1)) return (1200);
+	if ((level == 2)) return (3200);
+	if ((level == 3)) return (6500);
+	if ((level == 4)) return (9000);
+	return (12000);
 };
 
 float() ChessBotBatchSize =
@@ -527,7 +528,7 @@ float() ChessBotBatchSize =
 
 	batch = floor(cvar("botbatch"));
 	if ((batch <= MSG_BROADCAST))
-		batch = 12;
+		batch = 4;
 	if ((batch < 1))
 		batch = 1;
 	if ((batch > 24))
@@ -547,17 +548,33 @@ float(entity side, entity piece, float to_loc) ChessBotHistoryIndex =
 {
 	local float side_offset;
 	local float piece_offset;
+	local float piece_type;
+	local float file_num;
+	local float rank_num;
 
+	// Move ordering probes raw candidate destinations that can fall off the
+	// board (e.g. a knight on b1 or an a-file pawn capture); those are never
+	// legal, so report -1 instead of indexing chess_bot_history out of bounds.
+	piece_type = ChessPieceType(piece);
+	file_num = GetX(to_loc);
+	rank_num = GetY(to_loc);
+	if ((((((piece_type < CHESS_PAWN) || (piece_type > CHESS_KING)) || (file_num < 1)) || (file_num > 8)) || (rank_num < 1)) || (rank_num > 8))
+		return (-1);
 	side_offset = MSG_BROADCAST;
 	if ((side.chess_team == "black"))
 		side_offset = 384;
-	piece_offset = ((ChessPieceType(piece) - 1) * 64);
+	piece_offset = ((piece_type - 1) * 64);
 	return ((side_offset + piece_offset) + ChessBotSquareIndex(to_loc));
 };
 
 float(entity side, entity piece, float to_loc) ChessBotHistoryScore =
 {
-	return (chess_bot_history[ChessBotHistoryIndex(side, piece, to_loc)]);
+	local float history_index;
+
+	history_index = ChessBotHistoryIndex(side, piece, to_loc);
+	if ((history_index < MSG_BROADCAST))
+		return (MSG_BROADCAST);
+	return (chess_bot_history[history_index]);
 };
 
 void() ChessBotResetOrdering =
@@ -691,6 +708,8 @@ void(entity side, entity piece, float to_loc, float promotion, float ply, float 
 		}
 	}
 	history_index = ChessBotHistoryIndex(side, piece, to_loc);
+	if ((history_index < MSG_BROADCAST))
+		return;
 	bonus = ((depth * depth) * 4);
 	if ((bonus < 1))
 		bonus = 1;
@@ -1176,7 +1195,7 @@ void() ChessBotStartSearch =
 
 void(string reason) ChessBotFailSafe =
 {
-	bprint("** CHESS BOT ERROR: ");
+	bprint("** CHESS COMPUTER ERROR: ");
 	bprint(reason);
 	bprint("; continuing as a human player\n");
 	chess_bot_searching = FALSE;
@@ -1329,9 +1348,99 @@ float() ChessBotProcessRootCandidate =
 	return (TRUE);
 };
 
+void(float completed_depth) ChessBotAcceptBestMove =
+{
+	chess_bot_completed_piece = chess_bot_best_piece;
+	chess_bot_completed_dest = chess_bot_best_dest;
+	chess_bot_completed_promotion = chess_bot_best_promotion;
+	chess_bot_completed_score = chess_bot_best_score;
+	chess_bot_completed_depth = completed_depth;
+	ChessBotCommitPV();
+};
+
+float() ChessBotSelectFallbackMove =
+{
+	local entity piece;
+	local float candidate;
+	local float candidate_count;
+	local float to_loc;
+	local float promotion;
+	local float max_promotion;
+	local float score;
+	local float level;
+	local float saved_work;
+	local float saved_work_limit;
+
+	saved_work = chess_bot_work;
+	saved_work_limit = chess_bot_work_limit;
+	chess_bot_best_piece = world;
+	chess_bot_best_dest = MSG_BROADCAST;
+	chess_bot_best_promotion = CHESS_PROMOTE_QUEEN;
+	chess_bot_best_score = -100000;
+	chess_bot_root_legal = MSG_BROADCAST;
+	chess_bot_work = MSG_BROADCAST;
+	chess_bot_work_limit = CHESS_BOT_FALLBACK_WORK_LIMIT;
+	chess_bot_abort = FALSE;
+	ChessBotClearPVRow(MSG_BROADCAST);
+	piece = find(world, chess_team, chess_bot_side.chess_team);
+	while ((piece != world))
+	{
+		if ((ChessPieceLive(piece) && (piece.owner == chess_bot_side)))
+		{
+			candidate_count = ChessCandidateCount(piece);
+			candidate = 1;
+			while ((candidate <= candidate_count))
+			{
+				to_loc = ChessCandidateLocation(piece, candidate);
+				max_promotion = CHESS_PROMOTE_QUEEN;
+				if (ChessWouldPromote(piece, to_loc))
+					max_promotion = CHESS_PROMOTE_KNIGHT;
+				promotion = CHESS_PROMOTE_QUEEN;
+				while ((promotion <= max_promotion))
+				{
+					if (ChessMoveIsLegal(piece, to_loc, promotion))
+					{
+						score = ChessBotScoreMove(chess_bot_side, piece, to_loc, promotion, MSG_BROADCAST, -100000, 100000, MSG_BROADCAST);
+						chess_bot_abort = FALSE;
+						if ((score != CHESS_BOT_INVALID))
+						{
+							chess_bot_root_legal = (chess_bot_root_legal + 1);
+							level = ChessBotConfiguredLevel();
+							if ((level == 1))
+								score = (score + (random() * 80));
+							else
+								score = (score + (random() * 0.01));
+							if (((chess_bot_best_piece == world) || (score > chess_bot_best_score)) || ((score == chess_bot_best_score) && (random() < 0.5)))
+							{
+								chess_bot_best_piece = piece;
+								chess_bot_best_dest = to_loc;
+								chess_bot_best_promotion = promotion;
+								chess_bot_best_score = score;
+								ChessBotSetPV(MSG_BROADCAST, piece.location, to_loc, promotion);
+							}
+						}
+					}
+					promotion = (promotion + 1);
+				}
+				if (ChessCandidateEndsRay(piece, candidate, to_loc))
+					candidate = (ceil((candidate / 7)) * 7);
+				candidate = (candidate + 1);
+			}
+		}
+		piece = find(piece, chess_team, chess_bot_side.chess_team);
+	}
+	chess_bot_work = saved_work;
+	chess_bot_work_limit = saved_work_limit;
+	chess_bot_abort = FALSE;
+	if ((chess_bot_best_piece == world))
+		return (FALSE);
+	ChessBotAcceptBestMove(MSG_BROADCAST);
+	return (TRUE);
+};
+
 void() ChessBotPrintMove =
 {
-	bprint("** Chess bot: ");
+	bprint("\xC3\xE8\xE5\xF3\xF3: ");
 	if ((ChessPieceType(chess_bot_completed_piece) == CHESS_PAWN)) bprint("Pawn ");
 	else if ((ChessPieceType(chess_bot_completed_piece) == CHESS_KNIGHT)) bprint("Knight ");
 	else if ((ChessPieceType(chess_bot_completed_piece) == CHESS_BISHOP)) bprint("Bishop ");
@@ -1347,7 +1456,7 @@ void() ChessBotPrintMove =
 	bprint("\n");
 	if (cvar("botdebug"))
 	{
-		bprint("** Chess bot depth ");
+		bprint("** Chess computer depth ");
 		bprint(ftos(chess_bot_completed_depth));
 		bprint(", nodes ");
 		bprint(ftos(chess_bot_nodes));
@@ -1452,6 +1561,11 @@ void() ChessBotThink =
 		self.nextthink = (time + 0.1);
 		return;
 	}
+	if ((!bot_think_announced && (time >= bot_think_deadline)))
+	{
+		mysprint(current_turn, "Computer thinking\n");
+		bot_think_announced = TRUE;
+	}
 	if (!chess_bot_searching)
 	{
 		ChessBotStartSearch();
@@ -1477,7 +1591,7 @@ void() ChessBotThink =
 	{
 		if (cvar("botdebug"))
 		{
-			bprint("** Chess bot depth ");
+			bprint("** Chess computer depth ");
 			bprint(ftos(chess_bot_iteration_depth));
 			bprint(" exceeded work budget ");
 			bprint(ftos(chess_bot_work_limit));
@@ -1487,7 +1601,18 @@ void() ChessBotThink =
 		}
 		if ((chess_bot_completed_piece == world))
 		{
-			ChessBotFailSafe("vanilla work budget too small for depth one");
+			if ((chess_bot_best_piece != world))
+				ChessBotAcceptBestMove(MSG_BROADCAST);
+			else if (!ChessBotSelectFallbackMove())
+			{
+				ChessBotFinishSearch();
+				chess_bot_thinker = world;
+				remove(self);
+				return;
+			}
+			if (cvar("botdebug"))
+				bprint("** Chess computer using legal fallback move\n");
+			ChessBotFinishSearch();
 		}
 		else
 			ChessBotFinishSearch();
@@ -1499,21 +1624,14 @@ void() ChessBotThink =
 	{
 		if (cvar("botdebug"))
 		{
-			bprint("** Chess bot completed depth ");
+			bprint("** Chess computer completed depth ");
 			bprint(ftos(chess_bot_iteration_depth));
 			bprint(" with ");
 			bprint(ftos(chess_bot_root_legal));
 			bprint(" legal root moves\n");
 		}
 		if ((chess_bot_best_piece != world))
-		{
-			chess_bot_completed_piece = chess_bot_best_piece;
-			chess_bot_completed_dest = chess_bot_best_dest;
-			chess_bot_completed_promotion = chess_bot_best_promotion;
-			chess_bot_completed_score = chess_bot_best_score;
-			chess_bot_completed_depth = chess_bot_iteration_depth;
-			ChessBotCommitPV();
-		}
+			ChessBotAcceptBestMove(chess_bot_iteration_depth);
 		if (((chess_bot_best_piece != world) && (chess_bot_iteration_depth < chess_bot_target_depth)))
 		{
 			chess_bot_iteration_depth = (chess_bot_iteration_depth + 1);
@@ -1553,7 +1671,8 @@ void() ChessMaybeScheduleBotTurn =
 	setmodel(chess_bot_thinker, "progs/null.mdl");
 	chess_bot_thinker.think = ChessBotThink;
 	chess_bot_thinker.nextthink = (time + CheckersBotDelay());
-	mysprint(current_turn, "Computer thinking\n");
+	bot_think_deadline = (time + BOT_THINK_ANNOUNCE_DELAY);
+	bot_think_announced = FALSE;
 };
 
 void() ChessBotPromotePawn =

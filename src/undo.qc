@@ -7,7 +7,7 @@
 // avoids reviving monster corpses, reversing promotion/castling/en passant, or
 // touching the live combat path. See src/undo.qc plan for details.
 //
-// Undo is offered only in single-player vs the bot and in local hotseat
+// Undo is offered only in single-player vs the computer and in local hotseat
 // (human vs human); computer-vs-computer and spectators are excluded.
 
 float UNDO_MAX = 12;         // plies of history retained; must match array sizes
@@ -23,7 +23,7 @@ float undo_epfrom[12];       // last mover's last_move_from (en-passant rights)
 float undo_epto[12];         // last mover's last_move_to
 
 // Multiplayer takeback request (hotseat human-vs-human): a player asks and the
-// opponent must confirm, KTX-vote style. Unused in single-player vs the bot.
+// opponent must confirm, KTX-vote style. Unused in single-player vs the computer.
 float UNDO_VOTE_TIMEOUT = 45;   // seconds a request stays open
 entity undo_vote_by;            // side entity that requested, or world if none
 float undo_vote_time;           // time() the request was made
@@ -212,7 +212,8 @@ void() UndoPushSnapshot =
 		undo_count = (undo_count + 1);
 };
 
-// Undo is meaningful only with exactly one bot (vs-bot) or no bots (hotseat).
+// Undo is meaningful only with exactly one computer opponent or no computers
+// (hotseat).
 float() UndoModeAllowed =
 {
 	local float bots;
@@ -440,7 +441,7 @@ void() UndoExecute =
 };
 
 // Hotseat = live multiplayer, both sides human. Only then do we require the
-// opponent to confirm a takeback; vs the bot, undo is immediate.
+// opponent to confirm a takeback; vs the computer, undo is immediate.
 float() UndoIsVoteMode =
 {
 	if (single_player)

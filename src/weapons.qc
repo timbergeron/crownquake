@@ -1445,11 +1445,18 @@ void() LaserTargeterTrack =
 	local vector dir;
 	local vector src;
 
+	if (ComputerVsComputerGame())
+	{
+		setmodel(self, "progs/null.mdl");
+		self.nextthink = (time + 0.1);
+		return;
+	}
 	makevectors(self.owner.v_angle);
 	src = self.owner.origin;
 	dir = v_forward;
 	traceline(src, (src + (dir * 4048)), (current_selected != world), self);
 	src = ((0.1 * src) + (0.9 * trace_endpos));
+	setmodel(self, "progs/s_light.spr");
 	setorigin(self, src);
 	self.nextthink = (time + 0.1);
 };

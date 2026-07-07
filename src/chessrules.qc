@@ -1,4 +1,4 @@
-// Vanilla-compatible logical chess board and rules used by the chess bot.
+// Vanilla-compatible logical chess board and rules used by the chess computer.
 // Search code must not call the live, side-effecting CanMove path.
 
 float CHESS_PAWN = 1;

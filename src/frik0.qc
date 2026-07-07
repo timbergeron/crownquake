@@ -284,6 +284,41 @@ float() FindTarget =
 	return (FALSE);
 };
 
+float(entity ent) BoardPieceEntity =
+{
+	local float x;
+	local float y;
+
+	if ((ent == world))
+		return (FALSE);
+	if ((ent.chess_team == ""))
+		return (FALSE);
+	x = floor((ent.location / 10));
+	y = (ent.location - (x * 10));
+	if (((((x < 1) || (x > 8)) || (y < 1)) || (y > 8)))
+		return (FALSE);
+	if (ent.ischecker)
+		return (TRUE);
+	if ((ent.classname == "chess_pawn"))
+		return (TRUE);
+	if ((ent.classname == "chess_rook"))
+		return (TRUE);
+	if ((ent.classname == "chess_knight"))
+		return (TRUE);
+	if ((ent.classname == "chess_bishop"))
+		return (TRUE);
+	if ((ent.classname == "chess_queen"))
+		return (TRUE);
+	return (ent.classname == "chess_king");
+};
+
+void(entity ent) SetBoardPieceOrigin =
+{
+	if (!BoardPieceEntity(ent))
+		return;
+	setorigin(ent, LocationToVector(ent.location));
+};
+
 void(float dist) ai_forward =
 {
 	walkmove(self.angles_y, dist);
@@ -311,8 +346,6 @@ void(float dist) ai_walk =
 	local vector move_vec;
 	local vector v1;
 	local vector v2;
-	local vector dest_org;
-	local entity oldself;
 
 	movedist = dist;
 	if ((self.classname == "monster_dragon"))
@@ -349,8 +382,13 @@ void(float dist) ai_walk =
 	move_vec = (normalize(move_vec) * dist);
 	if (((dist >= ftemp) || (ftemp <= CF_HAS_MOVED)))
 	{
-		self.origin = self.goalentity.origin;
-		droptofloor();
+		if (BoardPieceEntity(self))
+			setorigin(self, self.goalentity.origin);
+		else
+		{
+			self.origin = self.goalentity.origin;
+			droptofloor();
+		}
 		if ((self.classname == "grabber"))
 		{
 			if ((self.weapon != IT_ROCKET_LAUNCHER))
@@ -390,13 +428,8 @@ void(float dist) ai_walk =
 			if (king_castle_move_flag)
 			{
 				spawn_tfog(castle_to_move.origin);
-				dest_org = LocationToVector(castle_destination);
-				setorigin(castle_to_move, dest_org);
-				oldself = self;
-				self = castle_to_move;
-				droptofloor();
-				self = oldself;
 				castle_to_move.location = castle_destination;
+				SetBoardPieceOrigin(castle_to_move);
 				spawn_tfog(castle_to_move.origin);
 				sound(castle_to_move, CHAN_AUTO, "misc/r_tele4.wav", LASERTARG_ON, ATTN_NORM);
 			}

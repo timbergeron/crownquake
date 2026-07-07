@@ -54,8 +54,13 @@ void() walkmonster_start_go =
 	local string stemp;
 	local entity etemp;
 
-	self.origin_z = (self.origin_z + 1);
-	droptofloor();
+	if (BoardPieceEntity(self))
+		SetBoardPieceOrigin(self);
+	else
+	{
+		self.origin_z = (self.origin_z + 1);
+		droptofloor();
+	}
 	self.takedamage = DAMAGE_AIM;
 	self.ideal_yaw = (self.angles * '0 1 0');
 	if (!self.yaw_speed)

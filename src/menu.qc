@@ -20,7 +20,7 @@ void(entity client, string event, float imp) Menu_DebugState =
 	bprint(ftos(game_checkers));
 	bprint(" checkers=");
 	bprint(ftos(cvar("checkers")));
-	bprint(" bot=");
+	bprint(" computer=");
 	bprint(ftos(cvar("bot")));
 	bprint(" restart=");
 	bprint(ftos(cvar("cq_menustart")));
@@ -346,7 +346,7 @@ void(float want_single_player) Menu_StartSelectedGame =
 
 void(float bot_side) Menu_StartCheckersBotGame =
 {
-	Menu_DebugState(self, "start bot game", bot_side);
+	Menu_DebugState(self, "start computer game", bot_side);
 	if ((!single_player && (player2 != world)))
 	{
 		self.menu_refresh = MSG_BROADCAST;
@@ -377,7 +377,7 @@ void(float bot_side) Menu_StartCheckersBotGame =
 	else
 		localcmd("set checkers 0\n");
 	localcmd("set teamplay 0\n");
-	Menu_DebugState(self, "queue bot restart", bot_side);
+	Menu_DebugState(self, "queue computer restart", bot_side);
 	centerprint(self, "Starting single-player game...\n");
 	localcmd("restart\n");
 };
@@ -521,6 +521,36 @@ void() Menu_SelectPause =
 		self.menu_return_screen = MENU_SCREEN_PAUSE;
 		Menu_Open(MENU_SCREEN_HELP);
 		return;
+	}
+	if (ComputerVsComputerGame())
+	{
+		if ((self.impulse == 3))
+		{
+			self.menu_return_screen = MENU_SCREEN_PAUSE;
+			Menu_Open(MENU_SCREEN_NEWGAME);
+			return;
+		}
+		if ((self.impulse == 4))
+		{
+			Menu_ToggleMoveHints();
+			return;
+		}
+		if ((self.impulse == 5))
+		{
+			if ((UndoModeAllowed() && UndoAvailable()))
+			{
+				UndoMove();
+				// Undo already reset the turn clock; suppress Menu_Close()'s
+				// pause-duration credit so the clock is not double-counted.
+				self.menu_open_time = time;
+				Menu_Close();
+			}
+			else
+			{
+				self.menu_refresh = MSG_BROADCAST;
+			}
+			return;
+		}
 	}
 	if ((self.impulse == 3))
 	{
@@ -860,13 +890,31 @@ void() Menu_RenderPause =
 	if ((single_player || (player2 == world)))
 	{
 		text = strcat("\n", "\xC3\xD2\xCF\xD7\xCE\xD1\xD5\xC1\xCB\xC5 \xCD\xC5\xCE\xD5", "\n\n");
-		text = strcat(text, Menu_Row(1, "Resume           "), Menu_Row(2, "Help             "), Menu_Row(3, "Resign           "), Menu_Row(4, "New Game         "));
-		if (cvar("movehints"))
-			text = strcat(text, Menu_Row(5, "Move Hints: On   "));
+		if (ComputerVsComputerGame())
+			text = strcat(text, Menu_Row(1, "Resume           "), Menu_Row(2, "Help             "), Menu_Row(3, "New Game         "));
 		else
-			text = strcat(text, Menu_Row(5, "Move Hints: Off  "));
+			text = strcat(text, Menu_Row(1, "Resume           "), Menu_Row(2, "Help             "), Menu_Row(3, "Resign           "), Menu_Row(4, "New Game         "));
+		if (cvar("movehints"))
+		{
+			if (ComputerVsComputerGame())
+				text = strcat(text, Menu_Row(4, "Move Hints: On   "));
+			else
+				text = strcat(text, Menu_Row(5, "Move Hints: On   "));
+		}
+		else
+		{
+			if (ComputerVsComputerGame())
+				text = strcat(text, Menu_Row(4, "Move Hints: Off  "));
+			else
+				text = strcat(text, Menu_Row(5, "Move Hints: Off  "));
+		}
 		if ((UndoModeAllowed() && UndoAvailable()))
-			text = strcat(text, Menu_Row(6, "Undo Move        "));
+		{
+			if (ComputerVsComputerGame())
+				text = strcat(text, Menu_Row(5, "Undo Move        "));
+			else
+				text = strcat(text, Menu_Row(6, "Undo Move        "));
+		}
 		centerprint(self, text);
 		return;
 	}

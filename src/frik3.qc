@@ -667,7 +667,8 @@ void() SpawnChessBoard =
 	SpawnChessBackRank("black", 8);
 	checkers_board_spawned = FALSE;
 	CheckersClearTurnState();
-	bprint("** crownquake chess mode: board spawned\n");
+	if (cvar("cq_debug"))
+		bprint("** crownquake chess mode: board spawned\n");
 };
 
 void() SpawnCheckersBoard =
@@ -686,7 +687,8 @@ void() SpawnCheckersBoard =
 	SpawnCheckersRank("black", 8, 2);
 	CheckersClearTurnState();
 	checkers_board_spawned = TRUE;
-	bprint("** crownquake checkers mode: board spawned\n");
+	if (cvar("cq_debug"))
+		bprint("** crownquake checkers mode: board spawned\n");
 };
 
 void(float use_checkers) ResetGameToMode =
@@ -1185,6 +1187,29 @@ float() CheckersBotWorkLimit =
 	return (1800);
 };
 
+float() ComputerVsComputerGame =
+{
+	if (!single_player)
+		return (FALSE);
+	if (((player1 == world) || (player2 == world)))
+		return (FALSE);
+	return (player1.is_bot && player2.is_bot);
+};
+
+void() HideComputerVsComputerPointers =
+{
+	if (!ComputerVsComputerGame())
+		return;
+	if ((player1.pointer != world))
+		setmodel(player1.pointer, "progs/null.mdl");
+	if ((player2.pointer != world))
+		setmodel(player2.pointer, "progs/null.mdl");
+	if (((player1.owner != world) && (player1.owner.pointer != world)))
+		setmodel(player1.owner.pointer, "progs/null.mdl");
+	if (((player2.owner != world) && (player2.owner.pointer != world)))
+		setmodel(player2.owner.pointer, "progs/null.mdl");
+};
+
 void() CheckersApplyBotCvars =
 {
 	local float bot_side;
@@ -1230,20 +1255,21 @@ void() CheckersApplyBotCvars =
 	{
 		player1.is_bot = TRUE;
 		if (game_checkers)
-			player1.netname = "Red Bot";
+			player1.netname = "Red Computer";
 		else
-			player1.netname = "Black Bot";
+			player1.netname = "Black Computer";
 		setmodel(player1, "progs/null.mdl");
 	}
 	if ((((bot_side == 2) || (bot_side == 3)) && (player2 != world)))
 	{
 		player2.is_bot = TRUE;
 		if (game_checkers)
-			player2.netname = "Black Bot";
+			player2.netname = "Black Computer";
 		else
-			player2.netname = "White Bot";
+			player2.netname = "White Computer";
 		setmodel(player2, "progs/null.mdl");
 	}
+	HideComputerVsComputerPointers();
 };
 
 float(entity ent, float loc) CheckersBotMoveIsJump =
@@ -1889,7 +1915,7 @@ void() CheckersBotChooseMove =
 		{
 			if (cvar("botdebug"))
 			{
-				bprint("** Checkers bot depth ");
+				bprint("** Checkers computer depth ");
 				bprint(ftos(checkers_bot_search_depth));
 				bprint(" exceeded work budget ");
 				bprint(ftos(checkers_bot_work_limit));
@@ -1914,7 +1940,7 @@ void() CheckersBotChooseMove =
 	checkers_bot_best_score = completed_score;
 	if (cvar("botdebug"))
 	{
-		bprint("** Checkers bot completed depth ");
+		bprint("** Checkers computer completed depth ");
 		bprint(ftos(completed_depth));
 		bprint("\n");
 	}
@@ -1968,7 +1994,7 @@ float() CheckersBotLiveCount =
 
 void(string reason) CheckersBotFailSafe =
 {
-	bprint("** CHECKERS BOT ERROR: ");
+	bprint("** CHECKERS COMPUTER ERROR: ");
 	bprint(reason);
 	bprint("; continuing as a human player\n");
 	cvar_set("bot", "0");
@@ -2073,6 +2099,11 @@ void() CheckersBotThink =
 		checkers_bot_thinker = self;
 		return;
 	}
+	if ((!bot_think_announced && (time >= bot_think_deadline)))
+	{
+		mysprint(current_turn, "Computer thinking\n");
+		bot_think_announced = TRUE;
+	}
 	checksum_before = CheckersBotPositionChecksum();
 	count_before = CheckersBotLiveCount();
 	CheckersBotChooseMove();
@@ -2133,7 +2164,8 @@ void() CheckersMaybeScheduleBotTurn =
 	setmodel(checkers_bot_thinker, "progs/null.mdl");
 	checkers_bot_thinker.think = CheckersBotThink;
 	checkers_bot_thinker.nextthink = (time + CheckersBotDelay());
-	mysprint(current_turn, "Computer thinking\n");
+	bot_think_deadline = (time + BOT_THINK_ANNOUNCE_DELAY);
+	bot_think_announced = FALSE;
 };
 
 float(entity ent, float loc, entity at_loc, float actual_move) CheckValidMove =
@@ -3558,7 +3590,6 @@ void() next_turn =
 		if (ChessInCheck(side_to_move))
 		{
 			sound(side_to_move, CHAN_AUTO, "voice/check.wav", SPAWN_CRUCIFIED, ATTN_NONE);
-			bprint("** ");
 			bprint(side_to_move.netname);
 			bprint(" is in check\n");
 		}
@@ -3592,7 +3623,7 @@ void() next_turn =
 		current_turn.pointer.scale = 0.5;
 		mycentreprint(current_turn, "Your turn\n");
 	}
-	else
+	else if (!ComputerVsComputerGame())
 	{
 		if ((game_checkers && (current_turn.chess_team == "white")))
 		{

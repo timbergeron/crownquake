@@ -647,8 +647,13 @@ void() Q_Stuff =
 	self.takedamage = DAMAGE_AIM;
 	self.solid = SOLID_SLIDEBOX;
 	self.movetype = MOVETYPE_STEP;
-	setorigin(self, (self.origin + '0 0 16'));
-	droptofloor();
+	if (BoardPieceEntity(self))
+		SetBoardPieceOrigin(self);
+	else
+	{
+		setorigin(self, (self.origin + '0 0 16'));
+		droptofloor();
+	}
 	self.pausetime = 100000000;
 	spawn_tfog(self.origin);
 	self.th_stand();
