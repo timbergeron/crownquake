@@ -2,6 +2,390 @@
 
 float CHESS_BOT_INVALID = -1234567;
 float CHESS_BOT_MATE = 90000;
+float chess_bot_eval_endgame;
+float chess_bot_white_pawns[9];
+float chess_bot_black_pawns[9];
+float chess_bot_white_pawn_min[9];
+float chess_bot_black_pawn_max[9];
+float chess_bot_killer1_from[8];
+float chess_bot_killer1_to[8];
+float chess_bot_killer1_promotion[8];
+float chess_bot_killer2_from[8];
+float chess_bot_killer2_to[8];
+float chess_bot_killer2_promotion[8];
+float chess_bot_history[768];
+float chess_bot_pv_from[64];
+float chess_bot_pv_to[64];
+float chess_bot_pv_promotion[64];
+float chess_bot_previous_pv_from[8];
+float chess_bot_previous_pv_to[8];
+float chess_bot_previous_pv_promotion[8];
+float chess_bot_repetition_key1[64];
+float chess_bot_repetition_key2[64];
+float chess_bot_repetition_count;
+float chess_bot_line_key1[8];
+float chess_bot_line_key2[8];
+float chess_bot_position_key1;
+float chess_bot_position_key2;
+
+float() ChessBotQuiescenceDepth =
+{
+	local float depth;
+
+	depth = floor(cvar("botqdepth"));
+	if ((depth < MSG_BROADCAST))
+		depth = MSG_BROADCAST;
+	if ((depth > 4))
+		depth = 4;
+	return (depth);
+};
+
+void(entity side) ChessBotBuildPositionKey =
+{
+	local entity piece;
+	local entity mover;
+	local float x;
+	local float y;
+	local float code;
+	local float en_passant_loc;
+
+	chess_bot_position_key1 = 17;
+	chess_bot_position_key2 = 29;
+	x = 1;
+	while ((x <= 8))
+	{
+		y = 1;
+		while ((y <= 8))
+		{
+			piece = ChessOccupantAt(((x * 10) + y));
+			code = MSG_BROADCAST;
+			if ((piece != world))
+			{
+				code = ChessPieceType(piece);
+				if ((piece.chess_team == "black"))
+					code = (code + 6);
+				if (piece.hasmoved)
+					code = (code + 13);
+			}
+			chess_bot_position_key1 = ((chess_bot_position_key1 * 7) + code + 1);
+			chess_bot_position_key1 = (chess_bot_position_key1 - (floor((chess_bot_position_key1 / 1000003)) * 1000003));
+			chess_bot_position_key2 = ((chess_bot_position_key2 * 11) + code + 3);
+			chess_bot_position_key2 = (chess_bot_position_key2 - (floor((chess_bot_position_key2 / 999983)) * 999983));
+			y = (y + 1);
+		}
+		x = (x + 1);
+	}
+	code = 1;
+	if (((side != world) && (side.chess_team == "black")))
+		code = 2;
+	en_passant_loc = MSG_BROADCAST;
+	if ((side != world))
+	{
+		mover = side.opponent;
+		if ((((mover != world) && (mover.last_moved != world)) && (ChessPieceType(mover.last_moved) == CHESS_PAWN)))
+		{
+			if ((fabs(GetY(mover.last_move_to) - GetY(mover.last_move_from)) == 2))
+				en_passant_loc = mover.last_move_to;
+		}
+	}
+	chess_bot_position_key1 = (((chess_bot_position_key1 * 7) + code) + en_passant_loc);
+	chess_bot_position_key1 = (chess_bot_position_key1 - (floor((chess_bot_position_key1 / 1000003)) * 1000003));
+	chess_bot_position_key2 = (((chess_bot_position_key2 * 11) + code) + (en_passant_loc * 3));
+	chess_bot_position_key2 = (chess_bot_position_key2 - (floor((chess_bot_position_key2 / 999983)) * 999983));
+};
+
+void() ChessBotResetRepetition =
+{
+	chess_bot_repetition_count = MSG_BROADCAST;
+};
+
+void(entity side) ChessBotRecordPosition =
+{
+	local float i;
+
+	if (((game_checkers || (side == world)) || !ChessOccupancyValid()))
+		return;
+	ChessBotBuildPositionKey(side);
+	if ((chess_bot_repetition_count >= 64))
+	{
+		i = 1;
+		while ((i < 64))
+		{
+			chess_bot_repetition_key1[(i - 1)] = chess_bot_repetition_key1[i];
+			chess_bot_repetition_key2[(i - 1)] = chess_bot_repetition_key2[i];
+			i = (i + 1);
+		}
+		chess_bot_repetition_count = 63;
+	}
+	chess_bot_repetition_key1[chess_bot_repetition_count] = chess_bot_position_key1;
+	chess_bot_repetition_key2[chess_bot_repetition_count] = chess_bot_position_key2;
+	chess_bot_repetition_count = (chess_bot_repetition_count + 1);
+};
+
+float(entity side) ChessBotGamePositionOccurrences =
+{
+	local float i;
+	local float count;
+
+	ChessBotBuildPositionKey(side);
+	count = MSG_BROADCAST;
+	i = MSG_BROADCAST;
+	while ((i < chess_bot_repetition_count))
+	{
+		if (((chess_bot_repetition_key1[i] == chess_bot_position_key1) && (chess_bot_repetition_key2[i] == chess_bot_position_key2)))
+			count = (count + 1);
+		i = (i + 1);
+	}
+	return (count);
+};
+
+float(entity side, float ply) ChessBotSearchPositionRepeated =
+{
+	local float i;
+	local float count;
+	local float row;
+
+	ChessBotBuildPositionKey(side);
+	count = MSG_BROADCAST;
+	i = MSG_BROADCAST;
+	while ((i < chess_bot_repetition_count))
+	{
+		if (((chess_bot_repetition_key1[i] == chess_bot_position_key1) && (chess_bot_repetition_key2[i] == chess_bot_position_key2)))
+			count = (count + 1);
+		i = (i + 1);
+	}
+	row = floor(ply);
+	i = 1;
+	while (((i < row) && (i < 8)))
+	{
+		if (((chess_bot_line_key1[i] == chess_bot_position_key1) && (chess_bot_line_key2[i] == chess_bot_position_key2)))
+			count = (count + 1);
+		i = (i + 1);
+	}
+	if (((row >= 1) && (row < 8)))
+	{
+		chess_bot_line_key1[row] = chess_bot_position_key1;
+		chess_bot_line_key2[row] = chess_bot_position_key2;
+	}
+	return (count >= 2);
+};
+
+void() ChessBotPrepareEvaluation =
+{
+	local entity piece;
+	local float material;
+	local float piece_type;
+	local float file_num;
+	local float rank_num;
+
+	file_num = 1;
+	while ((file_num <= 8))
+	{
+		chess_bot_white_pawns[file_num] = MSG_BROADCAST;
+		chess_bot_black_pawns[file_num] = MSG_BROADCAST;
+		chess_bot_white_pawn_min[file_num] = 9;
+		chess_bot_black_pawn_max[file_num] = MSG_BROADCAST;
+		file_num = (file_num + 1);
+	}
+	material = MSG_BROADCAST;
+	piece = find(world, chess_team, "white");
+	while ((piece != world))
+	{
+		if (ChessPieceLive(piece))
+		{
+			piece_type = ChessPieceType(piece);
+			if ((piece_type == CHESS_PAWN))
+			{
+				file_num = GetX(piece.location);
+				rank_num = GetY(piece.location);
+				chess_bot_white_pawns[file_num] = (chess_bot_white_pawns[file_num] + 1);
+				if ((rank_num < chess_bot_white_pawn_min[file_num]))
+					chess_bot_white_pawn_min[file_num] = rank_num;
+			}
+			else if ((piece_type != CHESS_KING))
+				material = (material + ChessMaterialValue(piece));
+		}
+		piece = find(piece, chess_team, "white");
+	}
+	piece = find(world, chess_team, "black");
+	while ((piece != world))
+	{
+		if (ChessPieceLive(piece))
+		{
+			piece_type = ChessPieceType(piece);
+			if ((piece_type == CHESS_PAWN))
+			{
+				file_num = GetX(piece.location);
+				rank_num = GetY(piece.location);
+				chess_bot_black_pawns[file_num] = (chess_bot_black_pawns[file_num] + 1);
+				if ((rank_num > chess_bot_black_pawn_max[file_num]))
+					chess_bot_black_pawn_max[file_num] = rank_num;
+			}
+			else if ((piece_type != CHESS_KING))
+				material = (material + ChessMaterialValue(piece));
+		}
+		piece = find(piece, chess_team, "black");
+	}
+	chess_bot_eval_endgame = (material <= 2600);
+};
+
+float(entity pawn) ChessBotPawnStructureScore =
+{
+	local float score;
+	local float x;
+	local float y;
+	local float file_num;
+	local float advance;
+	local float adjacent_pawn;
+	local float passed;
+
+	score = MSG_BROADCAST;
+	x = GetX(pawn.location);
+	y = GetY(pawn.location);
+	advance = (y - 2);
+	if ((pawn.chess_team == "black"))
+		advance = (7 - y);
+	// Doubled pawns obstruct one another and are harder to defend.
+	if ((pawn.chess_team == "white"))
+		score = (score - ((chess_bot_white_pawns[x] - 1) * 8));
+	else
+		score = (score - ((chess_bot_black_pawns[x] - 1) * 8));
+	// A pawn is isolated when neither neighboring file contains a friendly pawn.
+	adjacent_pawn = FALSE;
+	file_num = (x - 1);
+	while ((file_num <= (x + 1)))
+	{
+		if ((((file_num >= 1) && (file_num <= 8)) && (file_num != x)))
+		{
+			if (((pawn.chess_team == "white") && (chess_bot_white_pawns[file_num] > MSG_BROADCAST)))
+				adjacent_pawn = TRUE;
+			if (((pawn.chess_team == "black") && (chess_bot_black_pawns[file_num] > MSG_BROADCAST)))
+				adjacent_pawn = TRUE;
+		}
+		file_num = (file_num + 1);
+	}
+	if (!adjacent_pawn)
+		score = (score - 10);
+	// Passed pawns have no opposing pawn ahead on their own or adjacent files.
+	passed = TRUE;
+	file_num = (x - 1);
+	while ((file_num <= (x + 1)))
+	{
+		if (((file_num >= 1) && (file_num <= 8)))
+		{
+			if (((pawn.chess_team == "white") && (chess_bot_black_pawn_max[file_num] > y)))
+				passed = FALSE;
+			if (((pawn.chess_team == "black") && (chess_bot_white_pawn_min[file_num] < y)))
+				passed = FALSE;
+		}
+		file_num = (file_num + 1);
+	}
+	if (passed)
+		score = (score + 15 + (advance * 8));
+	return (score);
+};
+
+float(entity rook) ChessBotRookFileScore =
+{
+	local float x;
+	local float own_pawn;
+	local float any_pawn;
+	local float score;
+
+	x = GetX(rook.location);
+	if ((rook.chess_team == "white"))
+	{
+		own_pawn = (chess_bot_white_pawns[x] > MSG_BROADCAST);
+		any_pawn = ((chess_bot_white_pawns[x] + chess_bot_black_pawns[x]) > MSG_BROADCAST);
+	}
+	else
+	{
+		own_pawn = (chess_bot_black_pawns[x] > MSG_BROADCAST);
+		any_pawn = ((chess_bot_white_pawns[x] + chess_bot_black_pawns[x]) > MSG_BROADCAST);
+	}
+	score = MSG_BROADCAST;
+	if (!own_pawn)
+		score = (score + 8);
+	if (!any_pawn)
+		score = (score + 8);
+	return (score);
+};
+
+float(entity king, float center) ChessBotKingSafetyScore =
+{
+	local entity occupant;
+	local float direction;
+	local float file_num;
+	local float shield_rank;
+	local float score;
+
+	direction = 1;
+	if ((king.chess_team == "black"))
+		direction = -1;
+	shield_rank = (GetY(king.location) + direction);
+	score = MSG_BROADCAST;
+	if (((shield_rank >= 1) && (shield_rank <= 8)))
+	{
+		file_num = (GetX(king.location) - 1);
+		while ((file_num <= (GetX(king.location) + 1)))
+		{
+			if (((file_num >= 1) && (file_num <= 8)))
+			{
+				occupant = ChessOccupantAt(((file_num * 10) + shield_rank));
+				if ((((occupant != world) && (occupant.owner == king.owner)) && (ChessPieceType(occupant) == CHESS_PAWN)))
+					score = (score + 6);
+			}
+			file_num = (file_num + 1);
+		}
+	}
+	if ((king.hasmoved && ((GetX(king.location) == 3) || (GetX(king.location) == 7))))
+		score = (score + 25);
+	if (chess_bot_eval_endgame)
+		score = (score + (center * 4));
+	else
+		score = (score - (center * 4));
+	return (score);
+};
+
+// Cheap mobility deliberately ignores pins and attacked king squares. Full
+// legal generation here would dominate leaf evaluation cost; occupancy-based
+// reach still identifies trapped and active pieces well enough for scoring.
+float(entity piece) ChessBotPseudoMobility =
+{
+	local entity occupant;
+	local float piece_type;
+	local float candidate;
+	local float candidate_count;
+	local float to_loc;
+	local float mobility;
+
+	piece_type = ChessPieceType(piece);
+	candidate_count = ChessCandidateCount(piece);
+	candidate = 1;
+	mobility = MSG_BROADCAST;
+	while ((candidate <= candidate_count))
+	{
+		to_loc = ChessCandidateLocation(piece, candidate);
+		if (ChessLocOnBoard(to_loc))
+		{
+			occupant = ChessOccupantAt(to_loc);
+			if ((piece_type == CHESS_PAWN))
+			{
+				if (ChessPseudoLegalMove(piece, to_loc))
+					mobility = (mobility + 1);
+			}
+			else if (!((piece_type == CHESS_KING) && (candidate > 8)))
+			{
+				if (((occupant == world) || (occupant.owner != piece.owner)))
+					mobility = (mobility + 1);
+			}
+		}
+		if (ChessCandidateEndsRay(piece, candidate, to_loc))
+			candidate = (ceil((candidate / 7)) * 7);
+		candidate = (candidate + 1);
+	}
+	return (mobility);
+};
 
 float(entity piece) ChessBotPositionalScore =
 {
@@ -10,6 +394,7 @@ float(entity piece) ChessBotPositionalScore =
 	local float x;
 	local float y;
 	local float center;
+	local float mobility;
 
 	piece_type = ChessPieceType(piece);
 	score = ChessMaterialValue(piece);
@@ -26,6 +411,7 @@ float(entity piece) ChessBotPositionalScore =
 			score = (score + ((7 - y) * 5));
 		if (((x >= 3) && (x <= 6)))
 			score = (score + 3);
+		score = (score + ChessBotPawnStructureScore(piece));
 	}
 	else if ((piece_type == CHESS_KNIGHT))
 		score = (score + (center * 6));
@@ -35,14 +421,21 @@ float(entity piece) ChessBotPositionalScore =
 	{
 		if ((((piece.chess_team == "white") && (y == 7)) || ((piece.chess_team == "black") && (y == 2))))
 			score = (score + 12);
+		score = (score + ChessBotRookFileScore(piece));
 	}
 	else if ((piece_type == CHESS_QUEEN))
 		score = (score + center);
 	else if ((piece_type == CHESS_KING))
-	{
-		if ((piece.hasmoved && ((x == 3) || (x == 7))))
-			score = (score + 25);
-	}
+		score = (score + ChessBotKingSafetyScore(piece, center));
+	mobility = ChessBotPseudoMobility(piece);
+	if (((piece_type == CHESS_KNIGHT) || (piece_type == CHESS_BISHOP)))
+		score = (score + (mobility * 3));
+	else if ((piece_type == CHESS_ROOK))
+		score = (score + (mobility * 2));
+	else if (((piece_type == CHESS_QUEEN) || (piece_type == CHESS_KING)))
+		score = (score + mobility);
+	else if ((piece_type == CHESS_PAWN))
+		score = (score + (mobility * 2));
 	return (score);
 };
 
@@ -76,6 +469,7 @@ float(entity side) ChessBotEvaluate =
 {
 	if (((side == world) || (side.opponent == world)))
 		return (MSG_BROADCAST);
+	ChessBotPrepareEvaluation();
 	return (ChessBotSideScore(side) - ChessBotSideScore(side.opponent));
 };
 
@@ -142,6 +536,209 @@ float() ChessBotBatchSize =
 };
 
 float(entity side, float depth, float alpha, float beta, float ply) ChessBotSearch;
+float(entity side, float alpha, float beta, float ply, float qdepth) ChessBotQuiescence;
+
+float(float loc) ChessBotSquareIndex =
+{
+	return ((((GetX(loc) - 1) * 8) + (GetY(loc) - 1)));
+};
+
+float(entity side, entity piece, float to_loc) ChessBotHistoryIndex =
+{
+	local float side_offset;
+	local float piece_offset;
+
+	side_offset = MSG_BROADCAST;
+	if ((side.chess_team == "black"))
+		side_offset = 384;
+	piece_offset = ((ChessPieceType(piece) - 1) * 64);
+	return ((side_offset + piece_offset) + ChessBotSquareIndex(to_loc));
+};
+
+float(entity side, entity piece, float to_loc) ChessBotHistoryScore =
+{
+	return (chess_bot_history[ChessBotHistoryIndex(side, piece, to_loc)]);
+};
+
+void() ChessBotResetOrdering =
+{
+	local float i;
+
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		chess_bot_killer1_from[i] = MSG_BROADCAST;
+		chess_bot_killer1_to[i] = MSG_BROADCAST;
+		chess_bot_killer1_promotion[i] = MSG_BROADCAST;
+		chess_bot_killer2_from[i] = MSG_BROADCAST;
+		chess_bot_killer2_to[i] = MSG_BROADCAST;
+		chess_bot_killer2_promotion[i] = MSG_BROADCAST;
+		chess_bot_previous_pv_from[i] = MSG_BROADCAST;
+		chess_bot_previous_pv_to[i] = MSG_BROADCAST;
+		chess_bot_previous_pv_promotion[i] = MSG_BROADCAST;
+		chess_bot_line_key1[i] = MSG_BROADCAST;
+		chess_bot_line_key2[i] = MSG_BROADCAST;
+		i = (i + 1);
+	}
+	// Keep history across turns, but decay it so recent cutoffs dominate.
+	i = MSG_BROADCAST;
+	while ((i < 768))
+	{
+		chess_bot_history[i] = floor((chess_bot_history[i] * 0.5));
+		i = (i + 1);
+	}
+};
+
+void(float ply) ChessBotClearPVRow =
+{
+	local float row;
+	local float i;
+
+	row = floor(ply);
+	if (((row < MSG_BROADCAST) || (row > 7)))
+		return;
+	i = row;
+	while ((i < 8))
+	{
+		chess_bot_pv_from[((row * 8) + i)] = MSG_BROADCAST;
+		chess_bot_pv_to[((row * 8) + i)] = MSG_BROADCAST;
+		chess_bot_pv_promotion[((row * 8) + i)] = MSG_BROADCAST;
+		i = (i + 1);
+	}
+};
+
+void(float ply, float from_loc, float to_loc, float promotion) ChessBotSetPV =
+{
+	local float row;
+	local float child_row;
+	local float i;
+
+	row = floor(ply);
+	if (((row < MSG_BROADCAST) || (row > 7)))
+		return;
+	chess_bot_pv_from[((row * 8) + row)] = from_loc;
+	chess_bot_pv_to[((row * 8) + row)] = to_loc;
+	chess_bot_pv_promotion[((row * 8) + row)] = promotion;
+	child_row = (row + 1);
+	i = child_row;
+	while ((i < 8))
+	{
+		if ((child_row <= 7))
+		{
+			chess_bot_pv_from[((row * 8) + i)] = chess_bot_pv_from[((child_row * 8) + i)];
+			chess_bot_pv_to[((row * 8) + i)] = chess_bot_pv_to[((child_row * 8) + i)];
+			chess_bot_pv_promotion[((row * 8) + i)] = chess_bot_pv_promotion[((child_row * 8) + i)];
+		}
+		i = (i + 1);
+	}
+};
+
+void() ChessBotCommitPV =
+{
+	local float i;
+
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		chess_bot_previous_pv_from[i] = chess_bot_pv_from[i];
+		chess_bot_previous_pv_to[i] = chess_bot_pv_to[i];
+		chess_bot_previous_pv_promotion[i] = chess_bot_pv_promotion[i];
+		i = (i + 1);
+	}
+};
+
+float(float ply, float from_loc, float to_loc, float promotion) ChessBotIsPreviousPVMove =
+{
+	local float row;
+
+	row = floor(ply);
+	if (((row < MSG_BROADCAST) || (row > 7)))
+		return (FALSE);
+	return ((((chess_bot_previous_pv_from[row] == from_loc) && (chess_bot_previous_pv_to[row] == to_loc)) && (chess_bot_previous_pv_promotion[row] == promotion)));
+};
+
+float(float ply, float from_loc, float to_loc, float promotion) ChessBotIsKillerMove =
+{
+	local float row;
+
+	row = floor(ply);
+	if (((row < MSG_BROADCAST) || (row > 7)))
+		return (FALSE);
+	if ((((chess_bot_killer1_from[row] == from_loc) && (chess_bot_killer1_to[row] == to_loc)) && (chess_bot_killer1_promotion[row] == promotion)))
+		return (TRUE);
+	return ((((chess_bot_killer2_from[row] == from_loc) && (chess_bot_killer2_to[row] == to_loc)) && (chess_bot_killer2_promotion[row] == promotion)));
+};
+
+void(entity side, entity piece, float to_loc, float promotion, float ply, float depth) ChessBotRecordQuietCutoff =
+{
+	local float row;
+	local float from_loc;
+	local float history_index;
+	local float bonus;
+
+	row = floor(ply);
+	from_loc = piece.location;
+	if (((row >= MSG_BROADCAST) && (row <= 7)))
+	{
+		if (!(((chess_bot_killer1_from[row] == from_loc) && (chess_bot_killer1_to[row] == to_loc)) && (chess_bot_killer1_promotion[row] == promotion)))
+		{
+			chess_bot_killer2_from[row] = chess_bot_killer1_from[row];
+			chess_bot_killer2_to[row] = chess_bot_killer1_to[row];
+			chess_bot_killer2_promotion[row] = chess_bot_killer1_promotion[row];
+			chess_bot_killer1_from[row] = from_loc;
+			chess_bot_killer1_to[row] = to_loc;
+			chess_bot_killer1_promotion[row] = promotion;
+		}
+	}
+	history_index = ChessBotHistoryIndex(side, piece, to_loc);
+	bonus = ((depth * depth) * 4);
+	if ((bonus < 1))
+		bonus = 1;
+	chess_bot_history[history_index] = (chess_bot_history[history_index] + bonus);
+	if ((chess_bot_history[history_index] > 10000))
+		chess_bot_history[history_index] = 10000;
+};
+
+// Lower values are searched first. Promotions and favorable captures usually
+// produce the strongest alpha-beta cutoffs; losing captures follow them. When
+// the king is in check, quiet evasions form the final class.
+float(entity piece, entity captured, float to_loc, float in_check) ChessBotMoveOrderClass =
+{
+	local float exchange_score;
+
+	if (ChessWouldPromote(piece, to_loc))
+		return (1);
+	if ((captured != world))
+	{
+		exchange_score = ((ChessMaterialValue(captured) * 10) - ChessMaterialValue(piece));
+		if ((exchange_score >= 7000))
+			return (1);
+		if ((exchange_score >= 3500))
+			return (2);
+		if ((exchange_score >= 1500))
+			return (3);
+		return (4);
+	}
+	if (in_check)
+		return (5);
+	return (MSG_BROADCAST);
+};
+
+float(entity side, entity piece, entity captured, float to_loc, float promotion, float ply) ChessBotSearchOrderClass =
+{
+	local float tactical_class;
+
+	if (ChessBotIsPreviousPVMove(ply, piece.location, to_loc, promotion))
+		return (1);
+	tactical_class = ChessBotMoveOrderClass(piece, captured, to_loc, FALSE);
+	if ((tactical_class > MSG_BROADCAST))
+		return (tactical_class + 1);
+	if (ChessBotIsKillerMove(ply, piece.location, to_loc, promotion))
+		return (6);
+	if ((ChessBotHistoryScore(side, piece, to_loc) > MSG_BROADCAST))
+		return (7);
+	return (8);
+};
 
 float(entity side, entity piece, float to_loc, float promotion, float depth, float alpha, float beta, float ply) ChessBotScoreMove =
 {
@@ -161,6 +758,7 @@ float(entity side, entity piece, float to_loc, float promotion, float depth, flo
 	local float rook_dest;
 	local float score;
 	local float legal;
+	local float repetition_occurrences;
 
 	score = CHESS_BOT_INVALID;
 	chess_bot_work = (chess_bot_work + 1);
@@ -219,6 +817,9 @@ float(entity side, entity piece, float to_loc, float promotion, float depth, flo
 	side.last_moved = piece;
 	side.last_move_from = old_loc;
 	side.last_move_to = to_loc;
+	repetition_occurrences = MSG_BROADCAST;
+	if ((ply == MSG_BROADCAST))
+		repetition_occurrences = ChessBotGamePositionOccurrences(side.opponent);
 	king = get_king(side);
 	legal = ((king != world) && !ChessSquareAttacked(king.location, side.opponent));
 	if (legal)
@@ -227,7 +828,14 @@ float(entity side, entity piece, float to_loc, float promotion, float depth, flo
 		if ((chess_bot_work > chess_bot_work_limit))
 			chess_bot_abort = TRUE;
 		if (!chess_bot_abort)
-			score = -ChessBotSearch(side.opponent, (depth - 1), -beta, -alpha, (ply + 1));
+		{
+			if ((depth > MSG_BROADCAST))
+				score = -ChessBotSearch(side.opponent, (depth - 1), -beta, -alpha, (ply + 1));
+			else
+				score = -ChessBotQuiescence(side.opponent, -beta, -alpha, (ply + 1), ((MSG_BROADCAST - depth) - 1));
+			if (((repetition_occurrences > MSG_BROADCAST) && (fabs(score) < (CHESS_BOT_MATE - 1000))))
+				score = (score - (repetition_occurrences * 30));
+		}
 	}
 	else
 		score = CHESS_BOT_INVALID;
@@ -257,7 +865,10 @@ float(entity side, entity piece, float to_loc, float promotion, float depth, flo
 	return (score);
 };
 
-float(entity side, float depth, float alpha, float beta, float ply) ChessBotSearch =
+// Continue unstable leaf positions through captures, promotions, and all
+// legal check evasions. This prevents the fixed-depth search from stopping in
+// the middle of an exchange and valuing a temporarily won piece as permanent.
+float(entity side, float alpha, float beta, float ply, float qdepth) ChessBotQuiescence =
 {
 	local entity piece;
 	local entity captured;
@@ -266,20 +877,40 @@ float(entity side, float depth, float alpha, float beta, float ply) ChessBotSear
 	local float to_loc;
 	local float promotion;
 	local float max_promotion;
-	local float pass_num;
-	local float tactical;
+	local float in_check;
+	local float order_class;
+	local float wanted_class;
+	local float max_class;
 	local float score;
 	local float best;
 	local float any_move;
 
 	if (chess_bot_abort)
 		return (MSG_BROADCAST);
-	if ((depth <= MSG_BROADCAST))
-		return (ChessBotEvaluate(side));
+	if (ChessBotSearchPositionRepeated(side, ply))
+		return (MSG_BROADCAST);
+	in_check = ChessInCheck(side);
 	best = -100000;
+	if (!in_check)
+	{
+		best = ChessBotEvaluate(side);
+		if ((best >= beta))
+			return (best);
+		if ((best > alpha))
+			alpha = best;
+	}
+	if ((qdepth <= MSG_BROADCAST))
+	{
+		if (in_check)
+			return (ChessBotEvaluate(side));
+		return (best);
+	}
 	any_move = FALSE;
-	pass_num = 1;
-	while (((pass_num <= 2) && !chess_bot_abort))
+	max_class = 4;
+	if (in_check)
+		max_class = 5;
+	wanted_class = 1;
+	while (((wanted_class <= max_class) && !chess_bot_abort))
 	{
 		piece = find(world, chess_team, side.chess_team);
 		while (((piece != world) && !chess_bot_abort))
@@ -292,8 +923,8 @@ float(entity side, float depth, float alpha, float beta, float ply) ChessBotSear
 				{
 					to_loc = ChessCandidateLocation(piece, candidate);
 					captured = ChessCapturedForMove(piece, to_loc);
-					tactical = ((captured != world) || ChessWouldPromote(piece, to_loc));
-					if ((((pass_num == 1) && tactical) || ((pass_num == 2) && !tactical)))
+					order_class = ChessBotMoveOrderClass(piece, captured, to_loc, in_check);
+					if ((order_class == wanted_class))
 					{
 						max_promotion = CHESS_PROMOTE_QUEEN;
 						if (ChessWouldPromote(piece, to_loc))
@@ -301,7 +932,7 @@ float(entity side, float depth, float alpha, float beta, float ply) ChessBotSear
 						promotion = CHESS_PROMOTE_QUEEN;
 						while (((promotion <= max_promotion) && !chess_bot_abort))
 						{
-							score = ChessBotScoreMove(side, piece, to_loc, promotion, depth, alpha, beta, ply);
+							score = ChessBotScoreMove(side, piece, to_loc, promotion, (MSG_BROADCAST - qdepth), alpha, beta, ply);
 							if ((score != CHESS_BOT_INVALID))
 							{
 								any_move = TRUE;
@@ -314,6 +945,92 @@ float(entity side, float depth, float alpha, float beta, float ply) ChessBotSear
 							}
 							promotion = (promotion + 1);
 						}
+					}
+					if (ChessCandidateEndsRay(piece, candidate, to_loc))
+						candidate = (ceil((candidate / 7)) * 7);
+					candidate = (candidate + 1);
+				}
+			}
+			piece = find(piece, chess_team, side.chess_team);
+		}
+		wanted_class = (wanted_class + 1);
+	}
+	if (chess_bot_abort)
+		return (MSG_BROADCAST);
+	if ((in_check && !any_move))
+		return ((-CHESS_BOT_MATE) + ply);
+	return (best);
+};
+
+float(entity side, float depth, float alpha, float beta, float ply) ChessBotSearch =
+{
+	local entity piece;
+	local entity captured;
+	local float candidate;
+	local float candidate_count;
+	local float to_loc;
+	local float promotion;
+	local float max_promotion;
+	local float pass_num;
+	local float order_class;
+	local float from_loc;
+	local float score;
+	local float best;
+	local float any_move;
+
+	if (chess_bot_abort)
+		return (MSG_BROADCAST);
+	if (ChessBotSearchPositionRepeated(side, ply))
+		return (MSG_BROADCAST);
+	ChessBotClearPVRow(ply);
+	if ((depth <= MSG_BROADCAST))
+		return (ChessBotQuiescence(side, alpha, beta, ply, ChessBotQuiescenceDepth()));
+	best = -100000;
+	any_move = FALSE;
+	pass_num = 1;
+	while (((pass_num <= 8) && !chess_bot_abort))
+	{
+		piece = find(world, chess_team, side.chess_team);
+		while (((piece != world) && !chess_bot_abort))
+		{
+			if ((ChessPieceLive(piece) && (piece.owner == side)))
+			{
+				candidate_count = ChessCandidateCount(piece);
+				candidate = 1;
+				while (((candidate <= candidate_count) && !chess_bot_abort))
+				{
+					to_loc = ChessCandidateLocation(piece, candidate);
+					captured = ChessCapturedForMove(piece, to_loc);
+					max_promotion = CHESS_PROMOTE_QUEEN;
+					if (ChessWouldPromote(piece, to_loc))
+						max_promotion = CHESS_PROMOTE_KNIGHT;
+					promotion = CHESS_PROMOTE_QUEEN;
+					while (((promotion <= max_promotion) && !chess_bot_abort))
+					{
+						order_class = ChessBotSearchOrderClass(side, piece, captured, to_loc, promotion, ply);
+						if ((order_class == pass_num))
+						{
+							from_loc = piece.location;
+							score = ChessBotScoreMove(side, piece, to_loc, promotion, depth, alpha, beta, ply);
+							if ((score != CHESS_BOT_INVALID))
+							{
+								any_move = TRUE;
+								if ((score > best))
+								{
+									best = score;
+									ChessBotSetPV(ply, from_loc, to_loc, promotion);
+								}
+								if ((score > alpha))
+									alpha = score;
+								if ((alpha >= beta))
+								{
+									if (((captured == world) && !ChessWouldPromote(piece, to_loc)))
+										ChessBotRecordQuietCutoff(side, piece, to_loc, promotion, ply, depth);
+									return (best);
+								}
+							}
+						}
+						promotion = (promotion + 1);
 					}
 					if (ChessCandidateEndsRay(piece, candidate, to_loc))
 						candidate = (ceil((candidate / 7)) * 7);
@@ -439,6 +1156,8 @@ void() ChessBotResetIteration =
 void() ChessBotStartSearch =
 {
 	ChessRebuildOccupancy();
+	ChessBotResetOrdering();
+	ChessBotClearPVRow(MSG_BROADCAST);
 	chess_bot_side = current_turn;
 	chess_bot_target_depth = ChessBotTargetDepth();
 	chess_bot_iteration_depth = 1;
@@ -499,6 +1218,7 @@ float() ChessBotProcessRootCandidate =
 	local float raw_score;
 	local float level;
 	local float tactical;
+	local float order_class;
 
 	if ((chess_bot_root_pass == MSG_BROADCAST))
 	{
@@ -519,6 +1239,7 @@ float() ChessBotProcessRootCandidate =
 			chess_bot_best_dest = to_loc;
 			chess_bot_best_promotion = chess_bot_root_promotion;
 			chess_bot_best_score = score;
+			ChessBotSetPV(MSG_BROADCAST, chess_bot_root_piece.location, to_loc, chess_bot_root_promotion);
 		}
 		chess_bot_root_piece = ChessBotNextRootPiece(chess_bot_side, world);
 		chess_bot_root_candidate = 1;
@@ -528,7 +1249,7 @@ float() ChessBotProcessRootCandidate =
 
 	if ((chess_bot_root_piece == world))
 	{
-		if ((chess_bot_root_pass < 2))
+		if ((chess_bot_root_pass < 6))
 		{
 			chess_bot_root_pass = (chess_bot_root_pass + 1);
 			chess_bot_root_piece = ChessBotNextRootPiece(chess_bot_side, world);
@@ -546,7 +1267,7 @@ float() ChessBotProcessRootCandidate =
 		chess_bot_root_promotion = CHESS_PROMOTE_QUEEN;
 		if ((chess_bot_root_piece == world))
 		{
-			if ((chess_bot_root_pass < 2))
+			if ((chess_bot_root_pass < 6))
 			{
 				chess_bot_root_pass = (chess_bot_root_pass + 1);
 				chess_bot_root_piece = ChessBotNextRootPiece(chess_bot_side, world);
@@ -562,7 +1283,13 @@ float() ChessBotProcessRootCandidate =
 		max_promotion = CHESS_PROMOTE_KNIGHT;
 	captured = ChessCapturedForMove(chess_bot_root_piece, to_loc);
 	tactical = ((captured != world) || ChessWouldPromote(chess_bot_root_piece, to_loc));
-	if ((((chess_bot_root_pass == 1) && !tactical) || ((chess_bot_root_pass == 2) && tactical)))
+	if (tactical)
+		order_class = ChessBotMoveOrderClass(chess_bot_root_piece, captured, to_loc, FALSE);
+	else if ((ChessBotHistoryScore(chess_bot_side, chess_bot_root_piece, to_loc) > MSG_BROADCAST))
+		order_class = 5;
+	else
+		order_class = 6;
+	if ((chess_bot_root_pass != order_class))
 	{
 		chess_bot_root_promotion = max_promotion;
 		ChessBotAdvanceRoot(max_promotion, to_loc);
@@ -595,6 +1322,7 @@ float() ChessBotProcessRootCandidate =
 			chess_bot_best_dest = to_loc;
 			chess_bot_best_promotion = chess_bot_root_promotion;
 			chess_bot_best_score = score;
+			ChessBotSetPV(MSG_BROADCAST, chess_bot_root_piece.location, to_loc, chess_bot_root_promotion);
 		}
 	}
 	ChessBotAdvanceRoot(max_promotion, to_loc);
@@ -784,6 +1512,7 @@ void() ChessBotThink =
 			chess_bot_completed_promotion = chess_bot_best_promotion;
 			chess_bot_completed_score = chess_bot_best_score;
 			chess_bot_completed_depth = chess_bot_iteration_depth;
+			ChessBotCommitPV();
 		}
 		if (((chess_bot_best_piece != world) && (chess_bot_iteration_depth < chess_bot_target_depth)))
 		{

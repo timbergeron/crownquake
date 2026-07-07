@@ -559,6 +559,9 @@ void() Menu_SelectPause =
 		if ((UndoModeAllowed() && UndoAvailable()))
 		{
 			UndoMove();
+			// Undo already reset the turn clock; suppress Menu_Close()'s
+			// pause-duration credit so the clock is not double-counted.
+			self.menu_open_time = time;
 			Menu_Close();
 		}
 		else
@@ -615,6 +618,22 @@ void() Menu_SelectGameOver =
 	{
 		self.menu_return_screen = MENU_SCREEN_GAMEOVER;
 		Menu_Open(MENU_SCREEN_HELP);
+		return;
+	}
+	if ((self.impulse == 5))
+	{
+		if ((UndoModeAllowed() && UndoAvailable()))
+		{
+			UndoMove();
+			// Undo already reset the turn clock; suppress Menu_Close()'s
+			// pause-duration credit so the clock is not double-counted.
+			self.menu_open_time = time;
+			Menu_Close();
+		}
+		else
+		{
+			self.menu_refresh = MSG_BROADCAST;
+		}
 		return;
 	}
 	if (((self.impulse == 4) || (self.impulse == 20)) || (self.impulse == 242))
@@ -905,6 +924,8 @@ void() Menu_RenderGameOver =
 	else
 		text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nWinner: ", self.menu_winner.netname, "\n\n");
 	text = strcat(text, Menu_Row(1, "Rematch          "), Menu_Row(2, "New Game         "), Menu_Row(3, "Help             "), Menu_Row(4, "Close            "));
+	if ((UndoModeAllowed() && UndoAvailable()))
+		text = strcat(text, Menu_Row(5, "Undo Move        "));
 	centerprint(self, text);
 };
 

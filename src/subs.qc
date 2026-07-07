@@ -335,6 +335,8 @@ void() CheckersCancelBotSearch;
 void() ChessMaybeScheduleBotTurn;
 void() ChessCancelBotSearch;
 void() ChessBotPromotePawn;
+void() ChessBotResetRepetition;
+void(entity side) ChessBotRecordPosition;
 void() ChessRebuildOccupancy;
 entity(float loc) ChessOccupantAt;
 entity(entity piece, float to_loc) ChessCapturedForMove;

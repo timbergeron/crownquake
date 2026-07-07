@@ -418,6 +418,8 @@ void(float slot) UndoRestore =
 		current_turn.pointer.scale = 0.5;
 	}
 	current_turn.turn_starttime = time;
+	ChessBotResetRepetition();
+	ChessBotRecordPosition(current_turn);
 };
 
 // Perform the takeback (no confirmation). Assumes UndoAvailable() already held.
@@ -495,7 +497,7 @@ void() UndoVoteInvoke =
 		return;
 	}
 	// A different player answered: this is the confirmation.
-	if (action_flag)
+	if ((action_flag && !gameover))
 	{
 		mysprint(self, "Finish the current move first.\n");
 		return;
@@ -518,7 +520,7 @@ void() UndoMove =
 		UndoVoteInvoke();
 		return;
 	}
-	if (action_flag)
+	if ((action_flag && !gameover))
 	{
 		mysprint(self, "Finish the current move first.\n");
 		return;

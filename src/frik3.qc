@@ -710,6 +710,7 @@ void(float use_checkers) ResetGameToMode =
 	LastMovedLocation = MSG_BROADCAST;
 	movenum = MSG_BROADCAST;
 	UndoResetStack();
+	ChessBotResetRepetition();
 	if ((GetBody != world))
 	{
 		remove(GetBody);
@@ -768,6 +769,7 @@ void(float use_checkers) ResetGameToMode =
 		mycentreprint(current_turn, "New game\n");
 		mystuffcmd(current_turn, "bf\n");
 		UndoPushSnapshot();
+		ChessBotRecordPosition(current_turn);
 	}
 	CheckersMaybeScheduleBotTurn();
 	ChessMaybeScheduleBotTurn();
@@ -3530,6 +3532,9 @@ void() CheckCheckersGameOver =
 		bprint("opponent");
 	}
 	bprint(" wins\n");
+	// Snapshot the terminal position so the last move can still be taken back
+	// from the game-over menu (UndoRestore clears the game-over state).
+	UndoPushSnapshot();
 	Menu_OpenGameOver(winner);
 };
 
@@ -3630,6 +3635,7 @@ void() next_turn =
 	}
 	action_flag = FALSE;
 	UndoPushSnapshot();
+	ChessBotRecordPosition(current_turn);
 	CheckersMaybeScheduleBotTurn();
 	ChessMaybeScheduleBotTurn();
 };
@@ -3686,6 +3692,9 @@ void(entity side_to_move, entity winner) ChessFinishNoLegalMoves =
 		else
 			mycentreprint(side_to_move, "Draw by stalemate.");
 	}
+	// Snapshot the terminal position so the last move can still be taken back
+	// from the game-over menu (UndoRestore clears the game-over state).
+	UndoPushSnapshot();
 	Menu_OpenGameOver(winner);
 };
 

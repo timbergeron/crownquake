@@ -524,6 +524,10 @@ void() PutClientInServer =
 						current_turn = self.opponent;
 					}
 					current_turn.turn_starttime = time;
+					UndoResetStack();
+					ChessBotResetRepetition();
+					UndoPushSnapshot();
+					ChessBotRecordPosition(current_turn);
 					current_selected = world;
 					mycentreprint(current_turn, "Your turn");
 					mystuffcmd(current_turn, "bf\n");
