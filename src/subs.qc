@@ -163,6 +163,13 @@ float checkers_bot_path_side[32];
 float checkers_bot_context_key1[33];
 float checkers_bot_context_key2[33];
 float checkers_bot_no_progress_plies;
+// Per-node cache for "does this side have a mandatory capture" — the single
+// hottest query in the search (recomputed ~once per move candidate otherwise).
+// Only trusted while checkers_bot_capture_cache_on is set (during a bot search).
+float checkers_bot_capture_cache_on;
+entity checkers_bot_capture_side;
+float checkers_bot_capture_value;
+float checkers_bot_capture_valid;
 string game_draw_reason;
 entity chess_file1;
 entity chess_file2;
@@ -379,6 +386,7 @@ float(entity ent) CheckersPieceCanJump;
 float(entity ent, float loc) CheckersBotMoveIsJump;
 float(entity side, entity forced_piece, entity piece, float loc) CheckersBotMoveAllowed;
 float(entity side_owner) CheckersAnyCaptureAvailable;
+float(entity side_owner) CheckersBotSideHasCapture;
 float(entity side_owner) CheckersSideHasLegalMove;
 void() CheckCheckersGameOver;
 void(entity plyr) UpdateMonsterColors;

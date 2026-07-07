@@ -951,6 +951,22 @@ float(entity side_owner) CheckersAnyCaptureAvailable =
 	return (CheckersFirstCapturePiece(side_owner) != world);
 };
 
+// Cached form of the above for the bot search. Whether a side has a mandatory
+// capture depends only on the side and the current board, but move generation
+// asks it once per candidate (~96 times per node), each time re-scanning every
+// piece. The cache collapses that to one scan per node; it is only trusted while
+// a search is running (checkers_bot_capture_cache_on) and is invalidated on every
+// make/unmake so it can never return a stale answer.
+float(entity side_owner) CheckersBotSideHasCapture =
+{
+	if (((checkers_bot_capture_cache_on && checkers_bot_capture_valid) && (checkers_bot_capture_side == side_owner)))
+		return (checkers_bot_capture_value);
+	checkers_bot_capture_value = (CheckersFirstCapturePiece(side_owner) != world);
+	checkers_bot_capture_side = side_owner;
+	checkers_bot_capture_valid = TRUE;
+	return (checkers_bot_capture_value);
+};
+
 float(entity side_owner) CheckersSideHasLegalMove =
 {
 	local entity trav;
@@ -1640,7 +1656,7 @@ float(entity side, entity forced_piece, entity piece, float loc) CheckersBotMove
 	{
 		return (FALSE);
 	}
-	must_capture = CheckersAnyCaptureAvailable(side);
+	must_capture = CheckersBotSideHasCapture(side);
 	if (must_capture)
 	{
 		return (FALSE);
@@ -2276,6 +2292,7 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 	{
 		piece.isking = TRUE;
 	}
+	checkers_bot_capture_valid = FALSE;
 	continues_jump = ((is_jump && !promoted) && CheckersPieceCanJump(piece));
 	if (continues_jump)
 	{
@@ -2315,6 +2332,7 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 		captured.location = captured_location;
 		captured.ischecker = captured_ischecker;
 	}
+	checkers_bot_capture_valid = FALSE;
 	if (checkers_bot_abort)
 		return (-1234567);
 	return (score);
@@ -2356,7 +2374,7 @@ float(entity side, entity forced_piece, float depth, float alpha, float beta) Ch
 		{
 			if ((depth <= (MSG_BROADCAST - quiescence_depth)))
 				return (CheckersBotEvaluate(side));
-			if (!CheckersAnyCaptureAvailable(side))
+			if (!CheckersBotSideHasCapture(side))
 				return (CheckersBotEvaluate(side));
 		}
 	}
@@ -2576,6 +2594,8 @@ void() CheckersBotChooseMove =
 	checkers_bot_previous_root_to = MSG_BROADCAST;
 	CheckersBotResetTranspositionTable();
 	CheckersBotResetSearchContext();
+	checkers_bot_capture_valid = FALSE;
+	checkers_bot_capture_cache_on = TRUE;
 	while ((checkers_bot_search_depth <= target_depth))
 	{
 		checkers_bot_abort = FALSE;
@@ -2606,6 +2626,8 @@ void() CheckersBotChooseMove =
 			checkers_bot_search_depth = (checkers_bot_search_depth + 1);
 		}
 	}
+	checkers_bot_capture_cache_on = FALSE;
+	checkers_bot_capture_valid = FALSE;
 	checkers_bot_best_piece = completed_piece;
 	checkers_bot_best_dest = completed_dest;
 	checkers_bot_best_score = completed_score;
