@@ -499,6 +499,7 @@ void(string team_name, float loc) SpawnCheckerMan =
 	self.location_str = ftos(loc);
 	self.ischecker = TRUE;
 	self.isking = FALSE;
+	SetBoardPieceOrigin(self);
 	self = oldself;
 };
 
@@ -630,6 +631,7 @@ void(string team_name, string piece_class, float loc) SpawnChessPiece =
 	self.ischecker = FALSE;
 	self.isking = FALSE;
 	self.hasmoved = FALSE;
+	SetBoardPieceOrigin(self);
 	self = oldself;
 };
 
@@ -759,6 +761,7 @@ void(float use_checkers) ResetGameToMode =
 	{
 		current_turn = player1;
 	}
+	CheckersResetDrawState();
 	if ((current_turn != world))
 	{
 		current_turn.turn_starttime = time;
@@ -975,6 +978,301 @@ float(entity side_owner) CheckersSideHasLegalMove =
 	return (FALSE);
 };
 
+float(entity side) CheckersSideCode =
+{
+	if (((side != world) && (side.chess_team == "white")))
+		return (1);
+	return (2);
+};
+
+void() CheckersBuildPositionSignature =
+{
+	local entity piece;
+	local float i;
+	local float square;
+	local float half;
+	local float bit_index;
+	local float bit;
+	local float bucket;
+
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		checkers_signature[i] = MSG_BROADCAST;
+		i = (i + 1);
+	}
+	piece = find(world, chess_team, "white");
+	while ((piece != world))
+	{
+		if ((((piece.flags & FL_MONSTER) && (piece.health > MSG_BROADCAST)) && piece.ischecker))
+		{
+			square = floor(((((GetX(piece.location) - 1) * 8) + (GetY(piece.location) - 1)) / 2));
+			half = floor((square / 16));
+			bit_index = (square - (half * 16));
+			bit = 1;
+			i = MSG_BROADCAST;
+			while ((i < bit_index))
+			{
+				bit = (bit * 2);
+				i = (i + 1);
+			}
+			bucket = half;
+			if (piece.isking)
+				bucket = (bucket + 2);
+			checkers_signature[bucket] = (checkers_signature[bucket] + bit);
+		}
+		piece = find(piece, chess_team, "white");
+	}
+	piece = find(world, chess_team, "black");
+	while ((piece != world))
+	{
+		if ((((piece.flags & FL_MONSTER) && (piece.health > MSG_BROADCAST)) && piece.ischecker))
+		{
+			square = floor(((((GetX(piece.location) - 1) * 8) + (GetY(piece.location) - 1)) / 2));
+			half = floor((square / 16));
+			bit_index = (square - (half * 16));
+			bit = 1;
+			i = MSG_BROADCAST;
+			while ((i < bit_index))
+			{
+				bit = (bit * 2);
+				i = (i + 1);
+			}
+			bucket = (4 + half);
+			if (piece.isking)
+				bucket = (bucket + 2);
+			checkers_signature[bucket] = (checkers_signature[bucket] + bit);
+		}
+		piece = find(piece, chess_team, "black");
+	}
+};
+
+float(float slot, float side_code) CheckersHistoryPositionMatches =
+{
+	local float i;
+	local float base;
+
+	if ((checkers_history_side[slot] != side_code))
+		return (FALSE);
+	base = (slot * 8);
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		if ((checkers_history_board[(base + i)] != checkers_signature[i]))
+			return (FALSE);
+		i = (i + 1);
+	}
+	return (TRUE);
+};
+
+float(float slot, float side_code) CheckersBotPathPositionMatches =
+{
+	local float i;
+	local float base;
+
+	if ((checkers_bot_path_side[slot] != side_code))
+		return (FALSE);
+	base = (slot * 8);
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		if ((checkers_bot_path_board[(base + i)] != checkers_signature[i]))
+			return (FALSE);
+		i = (i + 1);
+	}
+	return (TRUE);
+};
+
+void(entity side) CheckersAppendHistoryPosition =
+{
+	local float slot;
+	local float src;
+	local float i;
+
+	if ((side == world))
+		return;
+	if ((checkers_history_count >= CHECKERS_HISTORY_MAX))
+	{
+		slot = 1;
+		while ((slot < CHECKERS_HISTORY_MAX))
+		{
+			src = (slot * 8);
+			i = MSG_BROADCAST;
+			while ((i < 8))
+			{
+				checkers_history_board[(((slot - 1) * 8) + i)] = checkers_history_board[(src + i)];
+				i = (i + 1);
+			}
+			checkers_history_side[(slot - 1)] = checkers_history_side[slot];
+			slot = (slot + 1);
+		}
+		checkers_history_count = (CHECKERS_HISTORY_MAX - 1);
+	}
+	CheckersBuildPositionSignature();
+	slot = checkers_history_count;
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		checkers_history_board[((slot * 8) + i)] = checkers_signature[i];
+		i = (i + 1);
+	}
+	checkers_history_side[slot] = CheckersSideCode(side);
+	checkers_history_count = (checkers_history_count + 1);
+};
+
+void(string reason) CheckersFinishDraw =
+{
+	CheckersCancelBotSearch();
+	ChessCancelBotSearch();
+	gameover = TRUE;
+	action_flag = TRUE;
+	game_draw_reason = reason;
+	CheckersClearTurnState();
+	ClearLastHighlight();
+	bprint("\xC3\xE8\xE5\xE3\xEB\xE5\xF2\xF3: ");
+	bprint(reason);
+	bprint("\n");
+	if ((current_turn != world))
+		mycentreprint(current_turn, reason);
+	if (((!single_player && (current_turn != world)) && (current_turn.opponent != world)))
+		mycentreprint(current_turn.opponent, reason);
+	UndoPushSnapshot();
+	Menu_OpenGameOver(world);
+};
+
+void() CheckersResetDrawState =
+{
+	checkers_no_progress_plies = MSG_BROADCAST;
+	checkers_turn_progress = FALSE;
+	checkers_history_count = MSG_BROADCAST;
+	checkers_bot_path_count = MSG_BROADCAST;
+	checkers_bot_no_progress_plies = MSG_BROADCAST;
+	game_draw_reason = "";
+	if (((game_checkers && (current_turn != world))))
+		CheckersAppendHistoryPosition(current_turn);
+};
+
+float(entity side) CheckersHistoryOccurrenceCount =
+{
+	local float slot;
+	local float count;
+	local float side_code;
+
+	if ((side == world))
+		return (MSG_BROADCAST);
+	CheckersBuildPositionSignature();
+	side_code = CheckersSideCode(side);
+	slot = MSG_BROADCAST;
+	count = MSG_BROADCAST;
+	while ((slot < checkers_history_count))
+	{
+		if (CheckersHistoryPositionMatches(slot, side_code))
+			count = (count + 1);
+		slot = (slot + 1);
+	}
+	return (count);
+};
+
+float(entity side) CheckersRecordPositionAndCheckDraw =
+{
+	local float occurrences;
+
+	if (((!game_checkers || (side == world)) || gameover))
+		return (FALSE);
+	if (checkers_turn_progress)
+	{
+		checkers_no_progress_plies = MSG_BROADCAST;
+		checkers_history_count = MSG_BROADCAST;
+	}
+	else
+	{
+		checkers_no_progress_plies = (checkers_no_progress_plies + 1);
+	}
+	occurrences = CheckersHistoryOccurrenceCount(side);
+	CheckersAppendHistoryPosition(side);
+	checkers_turn_progress = FALSE;
+	if ((occurrences >= 2))
+	{
+		CheckersFinishDraw("Draw by threefold repetition.");
+		return (TRUE);
+	}
+	if ((checkers_no_progress_plies >= CHECKERS_NO_PROGRESS_LIMIT))
+	{
+		CheckersFinishDraw("Draw by 80-ply no-progress rule.");
+		return (TRUE);
+	}
+	return (FALSE);
+};
+
+float(entity side) CheckersBotPositionOccurrenceCount =
+{
+	local float slot;
+	local float count;
+	local float side_code;
+
+	if ((side == world))
+		return (MSG_BROADCAST);
+	CheckersBuildPositionSignature();
+	side_code = CheckersSideCode(side);
+	slot = MSG_BROADCAST;
+	count = MSG_BROADCAST;
+	while ((slot < checkers_history_count))
+	{
+		if (CheckersHistoryPositionMatches(slot, side_code))
+			count = (count + 1);
+		slot = (slot + 1);
+	}
+	slot = MSG_BROADCAST;
+	while ((slot < checkers_bot_path_count))
+	{
+		if (CheckersBotPathPositionMatches(slot, side_code))
+			count = (count + 1);
+		slot = (slot + 1);
+	}
+	return (count);
+};
+
+float(entity side) CheckersBotPositionWouldRepeat =
+{
+	return ((CheckersBotPositionOccurrenceCount(side) >= 2));
+};
+
+void(entity side) CheckersBotPushPosition =
+{
+	local float slot;
+	local float i;
+	local float context1;
+	local float context2;
+	local float value;
+
+	if (((side == world) || (checkers_bot_path_count >= CHECKERS_BOT_PATH_MAX)))
+		return;
+	CheckersBuildPositionSignature();
+	slot = checkers_bot_path_count;
+	context1 = checkers_bot_context_key1[slot];
+	context2 = checkers_bot_context_key2[slot];
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		checkers_bot_path_board[((slot * 8) + i)] = checkers_signature[i];
+		value = (checkers_signature[i] + i + 1);
+		context1 = ((context1 * 7) + value);
+		context1 = (context1 - (floor((context1 / 1000003)) * 1000003));
+		context2 = ((context2 * 11) + value + (i * 2));
+		context2 = (context2 - (floor((context2 / 999983)) * 999983));
+		i = (i + 1);
+	}
+	checkers_bot_path_side[slot] = CheckersSideCode(side);
+	value = checkers_bot_path_side[slot];
+	context1 = ((context1 * 7) + value + 1);
+	context1 = (context1 - (floor((context1 / 1000003)) * 1000003));
+	context2 = ((context2 * 11) + value + 3);
+	context2 = (context2 - (floor((context2 / 999983)) * 999983));
+	checkers_bot_context_key1[(slot + 1)] = context1;
+	checkers_bot_context_key2[(slot + 1)] = context2;
+	checkers_bot_path_count = (checkers_bot_path_count + 1);
+};
+
 float(entity ent) CheckersMaybePromote =
 {
 	if (((ent == world) || !ent.ischecker))
@@ -1148,6 +1446,18 @@ float() CheckersBotDepth =
 	{
 		depth = 5;
 	}
+	return (depth);
+};
+
+float() CheckersBotQuiescenceDepth =
+{
+	local float depth;
+
+	depth = floor(cvar("botqdepth"));
+	if ((depth < MSG_BROADCAST))
+		depth = MSG_BROADCAST;
+	if ((depth > 6))
+		depth = 6;
 	return (depth);
 };
 
@@ -1338,90 +1648,578 @@ float(entity side, entity forced_piece, entity piece, float loc) CheckersBotMove
 	return (CheckersCanStepTo(piece, loc));
 };
 
-float(entity piece) CheckersBotPieceScore =
+float(entity piece) CheckersBotPieceLive =
+{
+	if ((piece == world))
+		return (FALSE);
+	return (((piece.flags & FL_MONSTER) && (piece.health > MSG_BROADCAST)) && piece.ischecker);
+};
+
+float(entity side, float loc) CheckersBotFriendlyManAt =
+{
+	local entity piece;
+
+	piece = EntityAtLoc(loc);
+	if (!CheckersBotPieceLive(piece))
+		return (FALSE);
+	return ((piece.owner == side) && !piece.isking);
+};
+
+float(entity side, float total_pieces) CheckersBotBackRankScore =
+{
+	local entity piece;
+	local float home_rank;
+	local float guards;
+	local float score;
+
+	if ((side == world))
+		return (MSG_BROADCAST);
+	if ((side.chess_team == "white"))
+		home_rank = 1;
+	else
+		home_rank = 8;
+	piece = find(world, chess_team, side.chess_team);
+	while ((piece != world))
+	{
+		if ((CheckersBotPieceLive(piece) && !piece.isking))
+		{
+			if ((GetY(piece.location) == home_rank))
+				guards = (guards + 1);
+		}
+		piece = find(piece, chess_team, side.chess_team);
+	}
+	if ((guards > 2))
+		guards = 2;
+	score = (guards * 3);
+	if ((guards == 2))
+		score = (score + 3);
+	if ((total_pieces <= 8))
+		score = (score * 0.5);
+	return (score);
+};
+
+float(entity side) CheckersBotDoubleCornerScore =
+{
+	local float anchor;
+	local float support1;
+	local float support2;
+
+	if ((side == world))
+		return (MSG_BROADCAST);
+	// Standard squares 1/5-6 and their reflection form the double corners.
+	if ((side.chess_team == "white"))
+	{
+		anchor = 71;
+		support1 = 62;
+		support2 = 82;
+	}
+	else
+	{
+		anchor = 28;
+		support1 = 17;
+		support2 = 37;
+	}
+	if (!CheckersBotFriendlyManAt(side, anchor))
+		return (MSG_BROADCAST);
+	if ((CheckersBotFriendlyManAt(side, support1) || CheckersBotFriendlyManAt(side, support2)))
+		return (7);
+	return (2);
+};
+
+float(entity piece) CheckersBotMobilityScore =
+{
+	local float moves;
+
+	if (!CheckersBotPieceLive(piece))
+		return (MSG_BROADCAST);
+	if (CheckersCanStepTo(piece, (piece.location + 11))) moves = (moves + 1);
+	if (CheckersCanStepTo(piece, (piece.location - 9))) moves = (moves + 1);
+	if (CheckersCanStepTo(piece, (piece.location + 9))) moves = (moves + 1);
+	if (CheckersCanStepTo(piece, (piece.location - 11))) moves = (moves + 1);
+	return (moves * 2);
+};
+
+float(entity side_to_move, float own_count, float opponent_count, float total_pieces) CheckersBotOppositionScore =
+{
+	local entity piece;
+	local float target_odd_rank;
+	local float pieces_in_system;
+	local float rank;
+	local float rank_is_odd;
+	local float system_is_odd;
+	local float white_has_opposition;
+	local float bonus;
+
+	if ((((side_to_move == world) || (own_count != opponent_count)) || (total_pieces > 10)))
+		return (MSG_BROADCAST);
+	target_odd_rank = (side_to_move.chess_team == "white");
+	piece = find(world, chess_team, "white");
+	while ((piece != world))
+	{
+		if (CheckersBotPieceLive(piece))
+		{
+			rank = GetY(piece.location);
+			rank_is_odd = (rank - (floor((rank / 2)) * 2));
+			if ((rank_is_odd == target_odd_rank))
+				pieces_in_system = (pieces_in_system + 1);
+		}
+		piece = find(piece, chess_team, "white");
+	}
+	piece = find(world, chess_team, "black");
+	while ((piece != world))
+	{
+		if (CheckersBotPieceLive(piece))
+		{
+			rank = GetY(piece.location);
+			rank_is_odd = (rank - (floor((rank / 2)) * 2));
+			if ((rank_is_odd == target_odd_rank))
+				pieces_in_system = (pieces_in_system + 1);
+		}
+		piece = find(piece, chess_team, "black");
+	}
+	system_is_odd = (pieces_in_system - (floor((pieces_in_system / 2)) * 2));
+	if ((side_to_move.chess_team == "white"))
+		white_has_opposition = system_is_odd;
+	else
+		white_has_opposition = !system_is_odd;
+	if ((total_pieces <= 6))
+		bonus = 6;
+	else if ((total_pieces <= 8))
+		bonus = 4;
+	else
+		bonus = 2;
+	if (((checkers_bot_side.chess_team == "white") == white_has_opposition))
+		return (bonus);
+	return (MSG_BROADCAST - bonus);
+};
+
+float(entity hunter, entity prey, float hunter_count, float prey_count, float total_pieces) CheckersBotEndgamePressureScore =
+{
+	local entity target;
+	local entity piece;
+	local float target_x;
+	local float target_y;
+	local float distance;
+	local float nearest;
+	local float kings;
+	local float left;
+	local float right;
+	local float below;
+	local float above;
+	local float score;
+
+	if (((hunter == world) || (prey == world)))
+		return (MSG_BROADCAST);
+	if (((total_pieces > 6) || (prey_count != 1)))
+		return (MSG_BROADCAST);
+	if ((hunter_count <= prey_count))
+		return (MSG_BROADCAST);
+	target = find(world, chess_team, prey.chess_team);
+	while (((target != world) && !CheckersBotPieceLive(target)))
+		target = find(target, chess_team, prey.chess_team);
+	if ((target == world))
+		return (MSG_BROADCAST);
+	target_x = GetX(target.location);
+	target_y = GetY(target.location);
+	nearest = 99;
+	piece = find(world, chess_team, hunter.chess_team);
+	while ((piece != world))
+	{
+		if ((CheckersBotPieceLive(piece) && piece.isking))
+		{
+			kings = (kings + 1);
+			distance = (fabs((GetX(piece.location) - target_x)) + fabs((GetY(piece.location) - target_y)));
+			if ((distance < nearest))
+				nearest = distance;
+			if ((GetX(piece.location) < target_x)) left = TRUE;
+			if ((GetX(piece.location) > target_x)) right = TRUE;
+			if ((GetY(piece.location) < target_y)) below = TRUE;
+			if ((GetY(piece.location) > target_y)) above = TRUE;
+		}
+		piece = find(piece, chess_team, hunter.chess_team);
+	}
+	if (!kings)
+		return (MSG_BROADCAST);
+	if ((nearest < 14))
+		score = ((14 - nearest) * 2);
+	if ((left && right)) score = (score + 8);
+	if ((below && above)) score = (score + 8);
+	if ((target.isking && ((target.location == 71) || (target.location == 28))))
+		score = (score - 6);
+	return (score);
+};
+
+float(entity piece, float tempo_weight) CheckersBotPieceScore =
 {
 	local float score;
 	local float locx;
 	local float locy;
+	local float progress;
 
-	if (((piece == world) || !piece.ischecker))
-	{
+	if (!CheckersBotPieceLive(piece))
 		return (MSG_BROADCAST);
-	}
+	locx = GetX(piece.location);
+	locy = GetY(piece.location);
 	if (piece.isking)
-	{
 		score = 175;
-	}
 	else
 	{
 		score = 100;
 		if ((piece.chess_team == "white"))
-		{
-			score = (score + ((GetY(piece.location) - 1) * 4));
-		}
+			progress = (locy - 1);
 		else
-		{
-			score = (score + ((8 - GetY(piece.location)) * 4));
-		}
+			progress = (8 - locy);
+		score = (score + (progress * tempo_weight));
 	}
-	locx = GetX(piece.location);
-	locy = GetY(piece.location);
 	if (((locx >= 3) && (locx <= 6)) && ((locy >= 3) && (locy <= 6)))
 	{
-		score = (score + 6);
+		if (piece.isking)
+			score = (score + 8);
+		else
+			score = (score + 3);
+	}
+	if ((((locx == 1) || (locx == 8)) || (locy == 1)) || (locy == 8))
+	{
+		if (piece.isking)
+			score = (score - 5);
+		else
+			score = (score - 1);
 	}
 	if (CheckersPieceCanJump(piece))
-	{
-		score = (score + 20);
-	}
+		score = (score + 16);
 	return (score);
 };
 
-float() CheckersBotEvaluate =
+float(entity side_to_move) CheckersBotEvaluate =
 {
 	local entity trav;
 	local float score;
+	local float own_men;
+	local float own_kings;
+	local float opponent_men;
+	local float opponent_kings;
+	local float own_count;
+	local float opponent_count;
+	local float total_pieces;
+	local float total_men;
+	local float own_material;
+	local float opponent_material;
+	local float material_difference;
+	local float tempo_weight;
 
 	if (((checkers_bot_side == world) || (checkers_bot_side.opponent == world)))
-	{
 		return (MSG_BROADCAST);
-	}
 	if (!CheckersSideHasLegalMove(checkers_bot_side))
-	{
 		return (-90000);
-	}
 	if (!CheckersSideHasLegalMove(checkers_bot_side.opponent))
-	{
 		return (90000);
-	}
-	score = MSG_BROADCAST;
 	trav = find(world, chess_team, checkers_bot_side.chess_team);
 	while ((trav != world))
 	{
-		if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+		if (CheckersBotPieceLive(trav))
 		{
-			score = (score + CheckersBotPieceScore(trav));
-			if (CheckersPieceCanStep(trav))
-			{
-				score = (score + 2);
-			}
+			if (trav.isking) own_kings = (own_kings + 1);
+			else own_men = (own_men + 1);
 		}
 		trav = find(trav, chess_team, checkers_bot_side.chess_team);
 	}
 	trav = find(world, chess_team, checkers_bot_side.opponent.chess_team);
 	while ((trav != world))
 	{
-		if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+		if (CheckersBotPieceLive(trav))
 		{
-			score = (score - CheckersBotPieceScore(trav));
-			if (CheckersPieceCanStep(trav))
-			{
-				score = (score - 2);
-			}
+			if (trav.isking) opponent_kings = (opponent_kings + 1);
+			else opponent_men = (opponent_men + 1);
 		}
 		trav = find(trav, chess_team, checkers_bot_side.opponent.chess_team);
 	}
+	own_count = (own_men + own_kings);
+	opponent_count = (opponent_men + opponent_kings);
+	total_pieces = (own_count + opponent_count);
+	total_men = (own_men + opponent_men);
+	if ((total_men >= 16)) tempo_weight = 2;
+	else if ((total_men >= 9)) tempo_weight = 1;
+	else tempo_weight = 3;
+	trav = find(world, chess_team, checkers_bot_side.chess_team);
+	while ((trav != world))
+	{
+		if (CheckersBotPieceLive(trav))
+		{
+			score = (score + CheckersBotPieceScore(trav, tempo_weight));
+			score = (score + CheckersBotMobilityScore(trav));
+		}
+		trav = find(trav, chess_team, checkers_bot_side.chess_team);
+	}
+	trav = find(world, chess_team, checkers_bot_side.opponent.chess_team);
+	while ((trav != world))
+	{
+		if (CheckersBotPieceLive(trav))
+		{
+			score = (score - CheckersBotPieceScore(trav, tempo_weight));
+			score = (score - CheckersBotMobilityScore(trav));
+		}
+		trav = find(trav, chess_team, checkers_bot_side.opponent.chess_team);
+	}
+	score = (score + CheckersBotBackRankScore(checkers_bot_side, total_pieces));
+	score = (score - CheckersBotBackRankScore(checkers_bot_side.opponent, total_pieces));
+	score = (score + CheckersBotDoubleCornerScore(checkers_bot_side));
+	score = (score - CheckersBotDoubleCornerScore(checkers_bot_side.opponent));
+	own_material = ((own_men * 100) + (own_kings * 175));
+	opponent_material = ((opponent_men * 100) + (opponent_kings * 175));
+	material_difference = (own_material - opponent_material);
+	if ((total_pieces < 24))
+		score = (score + ((material_difference * (24 - total_pieces)) / 48));
+	score = (score + CheckersBotOppositionScore(side_to_move, own_count, opponent_count, total_pieces));
+	if ((own_material > opponent_material))
+		score = (score + CheckersBotEndgamePressureScore(checkers_bot_side, checkers_bot_side.opponent, own_count, opponent_count, total_pieces));
+	else if ((opponent_material > own_material))
+		score = (score - CheckersBotEndgamePressureScore(checkers_bot_side.opponent, checkers_bot_side, opponent_count, own_count, total_pieces));
+	if ((side_to_move == checkers_bot_side)) score = (score + 2);
+	else if ((side_to_move == checkers_bot_side.opponent)) score = (score - 2);
 	return (score);
+};
+
+float CHECKERS_TT_SIZE = 257;
+float CHECKERS_TT_EXACT = 1;
+float CHECKERS_TT_LOWER = 2;
+float CHECKERS_TT_UPPER = 3;
+float CHECKERS_MOVE_PLY_MAX = 32;
+float CHECKERS_MOVES_PER_PLY = 64;
+// Direct-mapped and deliberately small: it survives iterative-deepening passes,
+// but is cleared before every real move so stale game state cannot leak in.
+float checkers_tt_valid[257];
+float checkers_tt_key1[257];
+float checkers_tt_key2[257];
+float checkers_tt_depth[257];
+float checkers_tt_score[257];
+float checkers_tt_flag[257];
+float checkers_tt_best_from[257];
+float checkers_tt_best_to[257];
+float checkers_tt_position_key1;
+float checkers_tt_position_key2;
+float checkers_tt_hits;
+float checkers_tt_cutoffs;
+float checkers_tt_stores;
+float checkers_search_move_from[2048];
+float checkers_search_move_to[2048];
+float checkers_search_move_order[2048];
+float checkers_bot_previous_root_from;
+float checkers_bot_previous_root_to;
+float checkers_bot_skip_previous_root;
+
+void() CheckersBotResetTranspositionTable =
+{
+	local float i;
+
+	i = MSG_BROADCAST;
+	while ((i < CHECKERS_TT_SIZE))
+	{
+		checkers_tt_valid[i] = FALSE;
+		i = (i + 1);
+	}
+	checkers_tt_hits = MSG_BROADCAST;
+	checkers_tt_cutoffs = MSG_BROADCAST;
+	checkers_tt_stores = MSG_BROADCAST;
+};
+
+void() CheckersBotResetSearchContext =
+{
+	local float slot;
+	local float i;
+	local float value;
+	local float context1;
+	local float context2;
+
+	// Repetition makes otherwise identical boards path-dependent. Seed the TT
+	// context with real-game history; CheckersBotPushPosition extends it per ply.
+	context1 = 43;
+	context2 = 71;
+	slot = MSG_BROADCAST;
+	while ((slot < checkers_history_count))
+	{
+		i = MSG_BROADCAST;
+		while ((i < 8))
+		{
+			value = (checkers_history_board[((slot * 8) + i)] + i + 1);
+			context1 = ((context1 * 7) + value);
+			context1 = (context1 - (floor((context1 / 1000003)) * 1000003));
+			context2 = ((context2 * 11) + value + (i * 2));
+			context2 = (context2 - (floor((context2 / 999983)) * 999983));
+			i = (i + 1);
+		}
+		value = checkers_history_side[slot];
+		context1 = ((context1 * 7) + value + 1);
+		context1 = (context1 - (floor((context1 / 1000003)) * 1000003));
+		context2 = ((context2 * 11) + value + 3);
+		context2 = (context2 - (floor((context2 / 999983)) * 999983));
+		slot = (slot + 1);
+	}
+	checkers_bot_context_key1[0] = context1;
+	checkers_bot_context_key2[0] = context2;
+};
+
+void(entity side, entity forced_piece) CheckersBotBuildTranspositionKey =
+{
+	local float i;
+	local float value;
+	local float side_code;
+	local float forced_location;
+	local float occurrences;
+
+	CheckersBuildPositionSignature();
+	checkers_tt_position_key1 = 17;
+	checkers_tt_position_key2 = 29;
+	i = MSG_BROADCAST;
+	while ((i < 8))
+	{
+		value = (checkers_signature[i] + i + 1);
+		checkers_tt_position_key1 = ((checkers_tt_position_key1 * 7) + value);
+		checkers_tt_position_key1 = (checkers_tt_position_key1 - (floor((checkers_tt_position_key1 / 1000003)) * 1000003));
+		checkers_tt_position_key2 = ((checkers_tt_position_key2 * 11) + value + (i * 2));
+		checkers_tt_position_key2 = (checkers_tt_position_key2 - (floor((checkers_tt_position_key2 / 999983)) * 999983));
+		i = (i + 1);
+	}
+	side_code = CheckersSideCode(side);
+	forced_location = MSG_BROADCAST;
+	if ((forced_piece != world))
+		forced_location = forced_piece.location;
+	occurrences = CheckersBotPositionOccurrenceCount(side);
+	value = (((side_code * 100) + forced_location) + (checkers_bot_no_progress_plies * 1000) + (occurrences * 100000));
+	checkers_tt_position_key1 = ((checkers_tt_position_key1 * 7) + value);
+	checkers_tt_position_key1 = (checkers_tt_position_key1 - (floor((checkers_tt_position_key1 / 1000003)) * 1000003));
+	checkers_tt_position_key2 = ((checkers_tt_position_key2 * 11) + (value * 3) + 7);
+	checkers_tt_position_key2 = (checkers_tt_position_key2 - (floor((checkers_tt_position_key2 / 999983)) * 999983));
+	value = checkers_bot_context_key1[checkers_bot_path_count];
+	checkers_tt_position_key1 = ((checkers_tt_position_key1 * 7) + value);
+	checkers_tt_position_key1 = (checkers_tt_position_key1 - (floor((checkers_tt_position_key1 / 1000003)) * 1000003));
+	value = checkers_bot_context_key2[checkers_bot_path_count];
+	checkers_tt_position_key2 = ((checkers_tt_position_key2 * 11) + value);
+	checkers_tt_position_key2 = (checkers_tt_position_key2 - (floor((checkers_tt_position_key2 / 999983)) * 999983));
+};
+
+float(float key1) CheckersBotTranspositionIndex =
+{
+	return (key1 - (floor((key1 / CHECKERS_TT_SIZE)) * CHECKERS_TT_SIZE));
+};
+
+void(float key1, float key2, float depth, float score, float flag, float best_from, float best_to) CheckersBotStoreTransposition =
+{
+	local float slot;
+
+	if (checkers_bot_abort)
+		return;
+	slot = CheckersBotTranspositionIndex(key1);
+	if (((checkers_tt_valid[slot] && (checkers_tt_key1[slot] == key1)) && (checkers_tt_key2[slot] == key2)) && (checkers_tt_depth[slot] > depth))
+		return;
+	checkers_tt_valid[slot] = TRUE;
+	checkers_tt_key1[slot] = key1;
+	checkers_tt_key2[slot] = key2;
+	checkers_tt_depth[slot] = depth;
+	checkers_tt_score[slot] = score;
+	checkers_tt_flag[slot] = flag;
+	checkers_tt_best_from[slot] = best_from;
+	checkers_tt_best_to[slot] = best_to;
+	checkers_tt_stores = (checkers_tt_stores + 1);
+};
+
+float(float loc, float candidate) CheckersBotCandidateDestination =
+{
+	if ((candidate == MSG_BROADCAST)) return (loc + 22);
+	if ((candidate == 1)) return (loc - 18);
+	if ((candidate == 2)) return (loc + 18);
+	if ((candidate == 3)) return (loc - 22);
+	if ((candidate == 4)) return (loc + 11);
+	if ((candidate == 5)) return (loc - 9);
+	if ((candidate == 6)) return (loc + 9);
+	return (loc - 11);
+};
+
+float(entity side, entity forced_piece, float ply, float preferred_from, float preferred_to) CheckersBotGenerateOrderedMoves =
+{
+	local entity piece;
+	local float base;
+	local float count;
+	local float candidate;
+	local float destination;
+	local float order;
+	local float x;
+	local float y;
+	local float i;
+	local float j;
+	local float best_index;
+	local float swap;
+
+	if (((ply < MSG_BROADCAST) || (ply >= CHECKERS_MOVE_PLY_MAX)))
+	{
+		checkers_bot_abort = TRUE;
+		return (MSG_BROADCAST);
+	}
+	base = (floor(ply) * CHECKERS_MOVES_PER_PLY);
+	if ((forced_piece != world)) piece = forced_piece;
+	else piece = find(world, chess_team, side.chess_team);
+	while ((piece != world))
+	{
+		if ((((piece.flags & FL_MONSTER) && (piece.health > MSG_BROADCAST)) && piece.ischecker))
+		{
+			candidate = MSG_BROADCAST;
+			while ((candidate < 8))
+			{
+				destination = CheckersBotCandidateDestination(piece.location, candidate);
+				if (CheckersBotMoveAllowed(side, forced_piece, piece, destination))
+				{
+					if ((count >= CHECKERS_MOVES_PER_PLY))
+					{
+						checkers_bot_abort = TRUE;
+						return (count);
+					}
+					order = (8 - candidate);
+					if (((piece.location == preferred_from) && (destination == preferred_to)))
+						order = (order + 1000000);
+					if (CheckersBotMoveIsJump(piece, destination))
+						order = (order + 100000);
+					if (CheckersBotWouldPromote(piece, destination))
+						order = (order + 10000);
+					x = GetX(destination);
+					y = GetY(destination);
+					if ((((x >= 3) && (x <= 6)) && (y >= 3)) && (y <= 6))
+						order = (order + 100);
+					checkers_search_move_from[(base + count)] = piece.location;
+					checkers_search_move_to[(base + count)] = destination;
+					checkers_search_move_order[(base + count)] = order;
+					count = (count + 1);
+				}
+				candidate = (candidate + 1);
+			}
+		}
+		if ((forced_piece != world)) piece = world;
+		else piece = find(piece, chess_team, side.chess_team);
+	}
+	i = MSG_BROADCAST;
+	while ((i < count))
+	{
+		best_index = i;
+		j = (i + 1);
+		while ((j < count))
+		{
+			if ((checkers_search_move_order[(base + j)] > checkers_search_move_order[(base + best_index)]))
+				best_index = j;
+			j = (j + 1);
+		}
+		if ((best_index != i))
+		{
+			swap = checkers_search_move_from[(base + i)];
+			checkers_search_move_from[(base + i)] = checkers_search_move_from[(base + best_index)];
+			checkers_search_move_from[(base + best_index)] = swap;
+			swap = checkers_search_move_to[(base + i)];
+			checkers_search_move_to[(base + i)] = checkers_search_move_to[(base + best_index)];
+			checkers_search_move_to[(base + best_index)] = swap;
+			swap = checkers_search_move_order[(base + i)];
+			checkers_search_move_order[(base + i)] = checkers_search_move_order[(base + best_index)];
+			checkers_search_move_order[(base + best_index)] = swap;
+		}
+		i = (i + 1);
+	}
+	return (count);
 };
 
 float(entity side, entity forced_piece, float depth, float alpha, float beta) CheckersBotSearch;
@@ -1437,6 +2235,11 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 	local float promoted;
 	local float score;
 	local float is_jump;
+	local float continues_jump;
+	local entity next_side;
+	local entity next_forced_piece;
+	local float old_path_count;
+	local float old_no_progress;
 
 	checkers_bot_work = (checkers_bot_work + 1);
 	if ((checkers_bot_work > checkers_bot_work_limit))
@@ -1473,14 +2276,37 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 	{
 		piece.isking = TRUE;
 	}
-	if (((is_jump && !promoted) && CheckersPieceCanJump(piece)))
+	continues_jump = ((is_jump && !promoted) && CheckersPieceCanJump(piece));
+	if (continues_jump)
 	{
-		score = CheckersBotSearch(side, piece, depth, alpha, beta);
+		next_side = side;
+		next_forced_piece = piece;
 	}
 	else
 	{
-		score = CheckersBotSearch(side.opponent, world, (depth - 1), alpha, beta);
+		next_side = side.opponent;
+		next_forced_piece = world;
 	}
+	old_no_progress = checkers_bot_no_progress_plies;
+	if ((is_jump || promoted))
+		checkers_bot_no_progress_plies = MSG_BROADCAST;
+	else
+		checkers_bot_no_progress_plies = (checkers_bot_no_progress_plies + 1);
+	if ((CheckersSideHasLegalMove(next_side) && ((checkers_bot_no_progress_plies >= CHECKERS_NO_PROGRESS_LIMIT) || CheckersBotPositionWouldRepeat(next_side))))
+	{
+		score = MSG_BROADCAST;
+	}
+	else
+	{
+		old_path_count = checkers_bot_path_count;
+		CheckersBotPushPosition(next_side);
+		if (continues_jump)
+			score = CheckersBotSearch(next_side, next_forced_piece, depth, alpha, beta);
+		else
+			score = CheckersBotSearch(next_side, next_forced_piece, (depth - 1), alpha, beta);
+		checkers_bot_path_count = old_path_count;
+	}
+	checkers_bot_no_progress_plies = old_no_progress;
 	piece.location = old_location;
 	piece.isking = old_isking;
 	if ((captured != world))
@@ -1496,22 +2322,77 @@ float(entity side, entity forced_piece, entity piece, float loc, float depth, fl
 
 float(entity side, entity forced_piece, float depth, float alpha, float beta) CheckersBotSearch =
 {
-	local entity trav;
+	local entity piece;
 	local float best;
 	local float score;
-	local float any_move;
 	local float maximize;
+	local float quiescence_depth;
+	local float original_alpha;
+	local float original_beta;
+	local float key1;
+	local float key2;
+	local float slot;
+	local float preferred_from;
+	local float preferred_to;
+	local float move_count;
+	local float move_index;
+	local float move_base;
+	local float move_from;
+	local float move_to;
+	local float best_from;
+	local float best_to;
+	local float flag;
 
-	if ((depth <= MSG_BROADCAST))
-	{
-		return (CheckersBotEvaluate());
-	}
 	if ((side == world))
 	{
-		return (CheckersBotEvaluate());
+		return (CheckersBotEvaluate(side));
+	}
+	if ((depth <= MSG_BROADCAST))
+	{
+		quiescence_depth = CheckersBotQuiescenceDepth();
+		// Captures are mandatory, so a capture position is not a valid static
+		// evaluation point. Finish any active multi-jump even at the limit.
+		if ((forced_piece == world))
+		{
+			if ((depth <= (MSG_BROADCAST - quiescence_depth)))
+				return (CheckersBotEvaluate(side));
+			if (!CheckersAnyCaptureAvailable(side))
+				return (CheckersBotEvaluate(side));
+		}
 	}
 	if (checkers_bot_abort)
 		return (MSG_BROADCAST);
+	CheckersBotBuildTranspositionKey(side, forced_piece);
+	key1 = checkers_tt_position_key1;
+	key2 = checkers_tt_position_key2;
+	slot = CheckersBotTranspositionIndex(key1);
+	preferred_from = MSG_BROADCAST;
+	preferred_to = MSG_BROADCAST;
+	if (((checkers_tt_valid[slot] && (checkers_tt_key1[slot] == key1)) && (checkers_tt_key2[slot] == key2)))
+	{
+		checkers_tt_hits = (checkers_tt_hits + 1);
+		preferred_from = checkers_tt_best_from[slot];
+		preferred_to = checkers_tt_best_to[slot];
+		if ((checkers_tt_depth[slot] >= depth))
+		{
+			if ((checkers_tt_flag[slot] == CHECKERS_TT_EXACT))
+			{
+				checkers_tt_cutoffs = (checkers_tt_cutoffs + 1);
+				return (checkers_tt_score[slot]);
+			}
+			if (((checkers_tt_flag[slot] == CHECKERS_TT_LOWER) && (checkers_tt_score[slot] > alpha)))
+				alpha = checkers_tt_score[slot];
+			else if (((checkers_tt_flag[slot] == CHECKERS_TT_UPPER) && (checkers_tt_score[slot] < beta)))
+				beta = checkers_tt_score[slot];
+			if ((alpha >= beta))
+			{
+				checkers_tt_cutoffs = (checkers_tt_cutoffs + 1);
+				return (checkers_tt_score[slot]);
+			}
+		}
+	}
+	original_alpha = alpha;
+	original_beta = beta;
 	maximize = (side == checkers_bot_side);
 	if (maximize)
 	{
@@ -1521,288 +2402,56 @@ float(entity side, entity forced_piece, float depth, float alpha, float beta) Ch
 	{
 		best = 100000;
 	}
-	any_move = FALSE;
-	if ((forced_piece != world))
+	move_count = CheckersBotGenerateOrderedMoves(side, forced_piece, checkers_bot_path_count, preferred_from, preferred_to);
+	if (checkers_bot_abort)
+		return (MSG_BROADCAST);
+	move_base = (floor(checkers_bot_path_count) * CHECKERS_MOVES_PER_PLY);
+	move_index = MSG_BROADCAST;
+	while ((move_index < move_count))
 	{
-		trav = forced_piece;
-	}
-	else
-	{
-		trav = find(world, chess_team, side.chess_team);
-	}
-	while ((trav != world))
-	{
-		if (((trav == forced_piece) || (forced_piece == world)))
+		move_from = checkers_search_move_from[(move_base + move_index)];
+		move_to = checkers_search_move_to[(move_base + move_index)];
+		piece = EntityAtLoc(move_from);
+		if ((piece != world))
 		{
-			if ((((trav.flags & FL_MONSTER) && (trav.health > MSG_BROADCAST)) && trav.ischecker))
+			score = CheckersBotMoveSearchScore(side, forced_piece, piece, move_to, depth, alpha, beta);
+			if ((score != -1234567))
 			{
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 22), depth, alpha, beta);
-				if ((score != -1234567))
+				if (maximize)
 				{
-					any_move = TRUE;
-					if (maximize)
+					if ((score > best))
 					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
+						best = score;
+						best_from = move_from;
+						best_to = move_to;
 					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
+					if ((best > alpha)) alpha = best;
 				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 18), depth, alpha, beta);
-				if ((score != -1234567))
+				else
 				{
-					any_move = TRUE;
-					if (maximize)
+					if ((score < best))
 					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
+						best = score;
+						best_from = move_from;
+						best_to = move_to;
 					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
+					if ((best < beta)) beta = best;
 				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 18), depth, alpha, beta);
-				if ((score != -1234567))
-				{
-					any_move = TRUE;
-					if (maximize)
-					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
-					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
-				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 22), depth, alpha, beta);
-				if ((score != -1234567))
-				{
-					any_move = TRUE;
-					if (maximize)
-					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
-					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
-				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 11), depth, alpha, beta);
-				if ((score != -1234567))
-				{
-					any_move = TRUE;
-					if (maximize)
-					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
-					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
-				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 9), depth, alpha, beta);
-				if ((score != -1234567))
-				{
-					any_move = TRUE;
-					if (maximize)
-					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
-					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
-				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location + 9), depth, alpha, beta);
-				if ((score != -1234567))
-				{
-					any_move = TRUE;
-					if (maximize)
-					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
-					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
-				}
-				score = CheckersBotMoveSearchScore(side, forced_piece, trav, (trav.location - 11), depth, alpha, beta);
-				if ((score != -1234567))
-				{
-					any_move = TRUE;
-					if (maximize)
-					{
-						if ((score > best))
-						{
-							best = score;
-						}
-						if ((best > alpha))
-						{
-							alpha = best;
-						}
-					}
-					else
-					{
-						if ((score < best))
-						{
-							best = score;
-						}
-						if ((best < beta))
-						{
-							beta = best;
-						}
-					}
-					if ((beta <= alpha))
-					{
-						return (best);
-					}
-				}
+				if ((beta <= alpha))
+					move_index = move_count;
 			}
 		}
-		if ((forced_piece != world))
-		{
-			trav = world;
-		}
-		else
-		{
-			trav = find(trav, chess_team, side.chess_team);
-		}
+		move_index = (move_index + 1);
 	}
-	if (!any_move)
+	if ((move_count == MSG_BROADCAST))
 	{
-		if (maximize)
-		{
-			return (-90000);
-		}
-		return (90000);
+		if (maximize) best = -90000;
+		else best = 90000;
 	}
+	flag = CHECKERS_TT_EXACT;
+	if ((best <= original_alpha)) flag = CHECKERS_TT_UPPER;
+	else if ((best >= original_beta)) flag = CHECKERS_TT_LOWER;
+	CheckersBotStoreTransposition(key1, key2, depth, best, flag, best_from, best_to);
 	return (best);
 };
 
@@ -1834,6 +2483,8 @@ void(entity piece, float loc) CheckersBotConsiderRootMove =
 {
 	local float score;
 
+	if (((checkers_bot_skip_previous_root && (piece.location == checkers_bot_previous_root_from)) && (loc == checkers_bot_previous_root_to)))
+		return;
 	score = CheckersBotMoveSearchScore(current_turn, current_selected, piece, loc, checkers_bot_search_depth, -100000, 100000);
 	if ((score == -1234567))
 	{
@@ -1851,11 +2502,22 @@ void(entity piece, float loc) CheckersBotConsiderRootMove =
 void() CheckersBotChooseIteration =
 {
 	local entity trav;
+	local entity previous_piece;
 
 	checkers_bot_best_piece = world;
 	checkers_bot_best_dest = MSG_BROADCAST;
 	checkers_bot_best_score = -100000;
 	checkers_bot_side = current_turn;
+	checkers_bot_skip_previous_root = FALSE;
+	if ((checkers_bot_previous_root_from != MSG_BROADCAST))
+	{
+		previous_piece = EntityAtLoc(checkers_bot_previous_root_from);
+		if (((previous_piece != world) && (previous_piece.chess_team == current_turn.chess_team)))
+			CheckersBotConsiderRootMove(previous_piece, checkers_bot_previous_root_to);
+	}
+	if (checkers_bot_abort)
+		return;
+	checkers_bot_skip_previous_root = TRUE;
 	if (checkers_must_jump)
 	{
 		trav = current_selected;
@@ -1864,7 +2526,7 @@ void() CheckersBotChooseIteration =
 	{
 		trav = find(world, chess_team, current_turn.chess_team);
 	}
-	while ((trav != world))
+	while (((trav != world) && !checkers_bot_abort))
 	{
 		if (((trav == current_selected) || !checkers_must_jump))
 		{
@@ -1889,6 +2551,7 @@ void() CheckersBotChooseIteration =
 			trav = find(trav, chess_team, current_turn.chess_team);
 		}
 	}
+	checkers_bot_skip_previous_root = FALSE;
 };
 
 void() CheckersBotChooseMove =
@@ -1907,6 +2570,12 @@ void() CheckersBotChooseMove =
 	checkers_bot_work_limit = CheckersBotWorkLimit();
 	checkers_bot_search_depth = 1;
 	checkers_bot_work = MSG_BROADCAST;
+	checkers_bot_path_count = MSG_BROADCAST;
+	checkers_bot_no_progress_plies = checkers_no_progress_plies;
+	checkers_bot_previous_root_from = MSG_BROADCAST;
+	checkers_bot_previous_root_to = MSG_BROADCAST;
+	CheckersBotResetTranspositionTable();
+	CheckersBotResetSearchContext();
 	while ((checkers_bot_search_depth <= target_depth))
 	{
 		checkers_bot_abort = FALSE;
@@ -1931,6 +2600,8 @@ void() CheckersBotChooseMove =
 				completed_dest = checkers_bot_best_dest;
 				completed_score = checkers_bot_best_score;
 				completed_depth = checkers_bot_search_depth;
+				checkers_bot_previous_root_from = checkers_bot_best_piece.location;
+				checkers_bot_previous_root_to = checkers_bot_best_dest;
 			}
 			checkers_bot_search_depth = (checkers_bot_search_depth + 1);
 		}
@@ -1942,6 +2613,14 @@ void() CheckersBotChooseMove =
 	{
 		bprint("** Checkers computer completed depth ");
 		bprint(ftos(completed_depth));
+		bprint(", work ");
+		bprint(ftos(checkers_bot_work));
+		bprint(", TT hits/cutoffs/stores ");
+		bprint(ftos(checkers_tt_hits));
+		bprint("/");
+		bprint(ftos(checkers_tt_cutoffs));
+		bprint("/");
+		bprint(ftos(checkers_tt_stores));
 		bprint("\n");
 	}
 };
@@ -3507,6 +4186,7 @@ void() CheckersFinishMove =
 	jumped = checkers_capture_entity;
 	if ((jumped != world))
 	{
+		checkers_turn_progress = TRUE;
 		spawn_tfog(jumped.origin);
 		jumped.health = -10;
 		jumped.location = 0;
@@ -3517,6 +4197,8 @@ void() CheckersFinishMove =
 	}
 	CheckersClearCaptureTarget();
 	promoted = CheckersMaybePromote(self);
+	if (promoted)
+		checkers_turn_progress = TRUE;
 	if (((checkers_was_jump && !promoted) && CheckersPieceCanJump(self)))
 	{
 		checkers_must_jump = TRUE;
@@ -3541,6 +4223,7 @@ void() CheckCheckersGameOver =
 
 	loser = current_turn;
 	winner = current_turn.opponent;
+	game_draw_reason = "";
 	action_flag = TRUE;
 	gameover = TRUE;
 	CheckersClearTurnState();
@@ -3617,6 +4300,8 @@ void() next_turn =
 		CheckCheckersGameOver();
 		return;
 	}
+	if ((game_checkers && CheckersRecordPositionAndCheckDraw(current_turn)))
+		return;
 	if (!single_player)
 	{
 		setmodel(current_turn.pointer, "progs/s_light.spr");
@@ -3677,6 +4362,7 @@ void(entity side_to_move, entity winner) ChessFinishNoLegalMoves =
 	local float checkmate;
 
 	checkmate = ChessInCheck(side_to_move);
+	game_draw_reason = "";
 	gameover = TRUE;
 	action_flag = TRUE;
 	ClearSelectionEffect();
@@ -3695,6 +4381,7 @@ void(entity side_to_move, entity winner) ChessFinishNoLegalMoves =
 	else
 	{
 		bprint("** Stalemate: draw\n");
+		game_draw_reason = "Draw by stalemate.";
 		winner = world;
 	}
 	if (single_player)

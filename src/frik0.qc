@@ -314,9 +314,22 @@ float(entity ent) BoardPieceEntity =
 
 void(entity ent) SetBoardPieceOrigin =
 {
+	local entity oldself;
+	local vector dest;
+
 	if (!BoardPieceEntity(ent))
 		return;
-	setorigin(ent, LocationToVector(ent.location));
+	oldself = self;
+	self = ent;
+	// Pieces stand on the worldspawn board floor (~ -16), which sits above the
+	// recessed +ac* highlight tiles. Lift clear of the board and drop onto the
+	// real floor; droptofloor sets FL_ONGROUND so MOVETYPE_STEP gravity won't
+	// pull the piece under afterward.
+	dest = LocationToVector(ent.location);
+	setorigin(ent, (dest + '0 0 128'));
+	if (!droptofloor())
+		setorigin(ent, dest);
+	self = oldself;
 };
 
 void(float dist) ai_forward =
@@ -383,7 +396,7 @@ void(float dist) ai_walk =
 	if (((dist >= ftemp) || (ftemp <= CF_HAS_MOVED)))
 	{
 		if (BoardPieceEntity(self))
-			setorigin(self, self.goalentity.origin);
+			SetBoardPieceOrigin(self);
 		else
 		{
 			self.origin = self.goalentity.origin;

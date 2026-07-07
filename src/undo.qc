@@ -21,6 +21,7 @@ float undo_wfrags[12];       // white side .frags (capture count)
 float undo_bfrags[12];       // black side .frags
 float undo_epfrom[12];       // last mover's last_move_from (en-passant rights)
 float undo_epto[12];         // last mover's last_move_to
+float undo_checkers_no_progress[12];
 
 // Multiplayer takeback request (hotseat human-vs-human): a player asks and the
 // opponent must confirm, KTX-vote style. Unused in single-player vs the computer.
@@ -155,6 +156,7 @@ void() UndoShiftDown =
 		undo_bfrags[s] = undo_bfrags[(s + 1)];
 		undo_epfrom[s] = undo_epfrom[(s + 1)];
 		undo_epto[s] = undo_epto[(s + 1)];
+		undo_checkers_no_progress[s] = undo_checkers_no_progress[(s + 1)];
 		s = (s + 1);
 	}
 };
@@ -185,6 +187,7 @@ void() UndoPushSnapshot =
 		undo_side[slot] = 2;
 	undo_movenum[slot] = movenum;
 	undo_flags[slot] = ((gameover + (2 * king_dead)) + (4 * ralcheckmate));
+	undo_checkers_no_progress[slot] = checkers_no_progress_plies;
 	wside = UndoSideEntity("white");
 	bside = UndoSideEntity("black");
 	if ((wside != world))
@@ -419,8 +422,16 @@ void(float slot) UndoRestore =
 		current_turn.pointer.scale = 0.5;
 	}
 	current_turn.turn_starttime = time;
-	ChessBotResetRepetition();
-	ChessBotRecordPosition(current_turn);
+	if (game_checkers)
+	{
+		CheckersResetDrawState();
+		checkers_no_progress_plies = undo_checkers_no_progress[slot];
+	}
+	else
+	{
+		ChessBotResetRepetition();
+		ChessBotRecordPosition(current_turn);
+	}
 };
 
 // Perform the takeback (no confirmation). Assumes UndoAvailable() already held.

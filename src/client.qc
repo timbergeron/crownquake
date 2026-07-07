@@ -526,6 +526,7 @@ void() PutClientInServer =
 					current_turn.turn_starttime = time;
 					UndoResetStack();
 					ChessBotResetRepetition();
+					CheckersResetDrawState();
 					UndoPushSnapshot();
 					ChessBotRecordPosition(current_turn);
 					current_selected = world;

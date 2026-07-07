@@ -444,6 +444,7 @@ void(entity loser) Menu_ResignSide =
 		return;
 	}
 	winner = loser.opponent;
+	game_draw_reason = "";
 	ChessPerftCancel();
 	CheckersCancelBotSearch();
 	ChessCancelBotSearch();
@@ -968,7 +969,12 @@ void() Menu_RenderGameOver =
 	local string text;
 
 	if ((self.menu_winner == world))
-		text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nDraw by stalemate\n\n");
+	{
+		if ((game_draw_reason != ""))
+			text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\n", game_draw_reason, "\n\n");
+		else
+			text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nDraw\n\n");
+	}
 	else
 		text = strcat("\n", "\xC7\xC1\xCD\xC5 \xCF\xD6\xC5\xD2", "\n\nWinner: ", self.menu_winner.netname, "\n\n");
 	text = strcat(text, Menu_Row(1, "Rematch          "), Menu_Row(2, "New Game         "), Menu_Row(3, "Help             "), Menu_Row(4, "Close            "));
